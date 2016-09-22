@@ -37,7 +37,8 @@ set(SWRAP_TESTS
     test_swrap_unit
     test_max_sockets
     test_close_failure
-    test_fork_thread_deadlock)
+    test_fork_thread_deadlock
+    test_thread_sockets)
 
 if (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
     set(SWRAP_TESTS ${SWRAP_TESTS} test_sendmsg_recvmsg_fd)
