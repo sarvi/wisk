@@ -497,39 +497,51 @@ static void echo_tcp(int sock)
 
     int client_sock = -1;
     int s;
+    pid_t pid;
 
-    s = accept(sock, &addr.sa.s, &addr.sa_socklen);
-    if (s == -1) {
-        perror("accept");
-	goto done;
-    }
-
-    client_sock = socket_dup(s);
-    if (client_sock == -1) {
-        perror("socket_dup");
-	goto done;
-    }
-
-    /* Start ping pong */
     while (1) {
-        bret = recv(client_sock, buf, BUFSIZE, 0);
-        if (bret == -1) {
-            perror("recv");
+        s = accept(sock, &addr.sa.s, &addr.sa_socklen);
+        if (s == -1) {
+            perror("accept");
             goto done;
-        } else if (bret == 0) {
-            break;
         }
 
-        bret = send(client_sock, buf, bret, 0);
-        if (bret == -1) {
-            perror("send");
-            goto done;
+        pid = fork();
+        if (pid == -1) {
+            perror("fork");
+        } else if (pid == 0) {
+            close(sock);
+            client_sock = socket_dup(s);
+            if (client_sock == -1) {
+                perror("socket_dup");
+                goto done;
+            }
+
+            while (1) {
+                bret = recv(client_sock, buf, BUFSIZE, 0);
+                if (bret == -1) {
+                    perror("recv");
+                    goto done;
+                } else if (bret == 0) {
+                    break;
+                }
+
+                bret = send(client_sock, buf, bret, 0);
+                if (bret == -1) {
+                    perror("send");
+                    goto done;
+                }
+            }
+            close(s);
+            exit(0);
+        } else {
+            close(s);
         }
     }
 
 done:
     if (client_sock != -1) {
-	    close(client_sock);
+        close(client_sock);
     }
 }
 
