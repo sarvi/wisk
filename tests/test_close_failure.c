@@ -23,14 +23,12 @@ static int teardown(void **state)
 static void test_close_failure(void **state)
 {
 	int s;
-	int rc;
 
 	(void) state; /* unused */
-	(void) s; /*set but not used */
 
 	s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-	assert_int_not_equal(rc, -1);
+	assert_int_not_equal(s, -1);
 
 	/* Do not close the socket here so that destructor
 	 * handles it and no hang should be observed.*/
