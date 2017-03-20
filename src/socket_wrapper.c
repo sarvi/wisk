@@ -264,7 +264,7 @@ do { \
 /* This limit is to avoid broadcast sendto() needing to stat too many
  * files.  It may be raised (with a performance cost) to up to 254
  * without changing the format above */
-#define MAX_WRAPPED_INTERFACES 40
+#define MAX_WRAPPED_INTERFACES 64
 
 struct swrap_address {
 	socklen_t sa_socklen;
