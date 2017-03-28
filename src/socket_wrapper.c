@@ -438,6 +438,9 @@ typedef int (*__libc_getsockopt)(int sockfd,
 typedef int (*__libc_ioctl)(int d, unsigned long int request, ...);
 typedef int (*__libc_listen)(int sockfd, int backlog);
 typedef int (*__libc_open)(const char *pathname, int flags, mode_t mode);
+#ifdef HAVE_OPEN64
+typedef int (*__libc_open64)(const char *pathname, int flags, mode_t mode);
+#endif /* HAVE_OPEN64 */
 typedef int (*__libc_openat)(int dirfd, const char *path, int flags, ...);
 typedef int (*__libc_pipe)(int pipefd[2]);
 typedef int (*__libc_read)(int fd, void *buf, size_t count);
@@ -502,6 +505,9 @@ struct swrap_libc_symbols {
 	SWRAP_SYMBOL_ENTRY(ioctl);
 	SWRAP_SYMBOL_ENTRY(listen);
 	SWRAP_SYMBOL_ENTRY(open);
+#ifdef HAVE_OPEN64
+	SWRAP_SYMBOL_ENTRY(open64);
+#endif
 	SWRAP_SYMBOL_ENTRY(openat);
 	SWRAP_SYMBOL_ENTRY(pipe);
 	SWRAP_SYMBOL_ENTRY(read);
@@ -877,6 +883,22 @@ static int libc_open(const char *pathname, int flags, ...)
 
 	return fd;
 }
+
+#ifdef HAVE_OPEN64
+static int libc_vopen64(const char *pathname, int flags, va_list ap)
+{
+	long int mode = 0;
+	int fd;
+
+	swrap_bind_symbol_libc(open64);
+
+	mode = va_arg(ap, long int);
+
+	fd = swrap.libc.symbols._libc_open64.f(pathname, flags, (mode_t)mode);
+
+	return fd;
+}
+#endif /* HAVE_OPEN64 */
 
 static int libc_vopenat(int dirfd, const char *path, int flags, va_list ap)
 {
@@ -3607,6 +3629,41 @@ int open(const char *pathname, int flags, ...)
 
 	return fd;
 }
+
+/****************************************************************************
+ *   OPEN64
+ ***************************************************************************/
+
+#ifdef HAVE_OPEN64
+static int swrap_vopen64(const char *pathname, int flags, va_list ap)
+{
+	int ret;
+
+	ret = libc_vopen64(pathname, flags, ap);
+	if (ret != -1) {
+		/*
+		 * There are methods for closing descriptors (libc-internal code
+		 * paths, direct syscalls) which close descriptors in ways that
+		 * we can't intercept, so try to recover when we notice that
+		 * that's happened
+		 */
+		swrap_remove_stale(ret);
+	}
+	return ret;
+}
+
+int open64(const char *pathname, int flags, ...)
+{
+	va_list ap;
+	int fd;
+
+	va_start(ap, flags);
+	fd = swrap_vopen64(pathname, flags, ap);
+	va_end(ap);
+
+	return fd;
+}
+#endif /* HAVE_OPEN64 */
 
 /****************************************************************************
  *   OPENAT
