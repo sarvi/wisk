@@ -53,35 +53,6 @@ if (UNIX AND NOT WIN32)
         endif()
     endif (${CMAKE_C_COMPILER_ID} MATCHES "(GNU|Clang)")
 
-    #
-    # Check for large filesystem support
-    #
-    if (CMAKE_SIZEOF_VOID_P MATCHES "8")
-        # with large file support
-        execute_process(
-            COMMAND
-                getconf LFS64_CFLAGS
-            OUTPUT_VARIABLE
-                _lfs_CFLAGS
-            ERROR_QUIET
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-    else (CMAKE_SIZEOF_VOID_P MATCHES "8")
-        # with large file support
-        execute_process(
-            COMMAND
-                getconf LFS_CFLAGS
-            OUTPUT_VARIABLE
-                _lfs_CFLAGS
-            ERROR_QUIET
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
-    endif (CMAKE_SIZEOF_VOID_P MATCHES "8")
-    if (_lfs_CFLAGS)
-        string(REGEX REPLACE "[\r\n]" " " "${_lfs_CFLAGS}" "${${_lfs_CFLAGS}}")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_lfs_CFLAGS}")
-    endif (_lfs_CFLAGS)
-
 endif (UNIX AND NOT WIN32)
 
 if (MSVC)
