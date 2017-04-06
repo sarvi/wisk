@@ -421,6 +421,9 @@ typedef int (*__libc_dup)(int fd);
 typedef int (*__libc_dup2)(int oldfd, int newfd);
 typedef int (*__libc_fcntl)(int fd, int cmd, ...);
 typedef FILE *(*__libc_fopen)(const char *name, const char *mode);
+#ifdef HAVE_FOPEN64
+typedef FILE *(*__libc_fopen64)(const char *name, const char *mode);
+#endif
 #ifdef HAVE_EVENTFD
 typedef int (*__libc_eventfd)(int count, int flags);
 #endif
@@ -496,6 +499,9 @@ struct swrap_libc_symbols {
 	SWRAP_SYMBOL_ENTRY(dup2);
 	SWRAP_SYMBOL_ENTRY(fcntl);
 	SWRAP_SYMBOL_ENTRY(fopen);
+#ifdef HAVE_FOPEN64
+	SWRAP_SYMBOL_ENTRY(fopen64);
+#endif
 #ifdef HAVE_EVENTFD
 	SWRAP_SYMBOL_ENTRY(eventfd);
 #endif
@@ -857,6 +863,15 @@ static FILE *libc_fopen(const char *name, const char *mode)
 
 	return swrap.libc.symbols._libc_fopen.f(name, mode);
 }
+
+#ifdef HAVE_FOPEN64
+static FILE *libc_fopen64(const char *name, const char *mode)
+{
+	swrap_bind_symbol_libc(fopen64);
+
+	return swrap.libc.symbols._libc_fopen64.f(name, mode);
+}
+#endif /* HAVE_FOPEN64 */
 
 static int libc_vopen(const char *pathname, int flags, va_list ap)
 {
@@ -3596,6 +3611,31 @@ FILE *fopen(const char *name, const char *mode)
 {
 	return swrap_fopen(name, mode);
 }
+
+/****************************************************************************
+ *   FOPEN64
+ ***************************************************************************/
+
+#ifdef HAVE_FOPEN64
+static FILE *swrap_fopen64(const char *name, const char *mode)
+{
+	FILE *fp;
+
+	fp = libc_fopen64(name, mode);
+	if (fp != NULL) {
+		int fd = fileno(fp);
+
+		swrap_remove_stale(fd);
+	}
+
+	return fp;
+}
+
+FILE *fopen64(const char *name, const char *mode)
+{
+	return swrap_fopen64(name, mode);
+}
+#endif /* HAVE_FOPEN64 */
 
 /****************************************************************************
  *   OPEN
