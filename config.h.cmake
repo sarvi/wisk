@@ -41,6 +41,7 @@
 #cmakedefine HAVE_BINDRESVPORT 1
 #cmakedefine HAVE_ACCEPT4 1
 #cmakedefine HAVE_OPEN64 1
+#cmakedefine HAVE_FOPEN64 1
 #cmakedefine HAVE_PLEDGE 1
 
 #cmakedefine HAVE_ACCEPT_PSOCKLEN_T 1
