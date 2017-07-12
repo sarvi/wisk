@@ -190,12 +190,12 @@ enum swrap_dbglvl_e {
 
 #define SWRAP_LOCK_SI(si) do { \
 	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si); \
-	pthread_mutex_lock(&sic->mutex); \
+	pthread_mutex_lock(&sic->meta.mutex); \
 } while(0)
 
 #define SWRAP_UNLOCK_SI(si) do { \
 	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si); \
-	pthread_mutex_unlock(&sic->mutex); \
+	pthread_mutex_unlock(&sic->meta.mutex); \
 } while(0)
 
 #define DLIST_ADD(list, item) do { \
@@ -355,12 +355,17 @@ struct socket_info
 	} io;
 };
 
-struct socket_info_container
+struct socket_info_meta
 {
-	struct socket_info info;
 	unsigned int refcount;
 	int next_free;
 	pthread_mutex_t mutex;
+};
+
+struct socket_info_container
+{
+	struct socket_info info;
+	struct socket_info_meta meta;
 };
 
 static struct socket_info_container *sockets;
@@ -1255,34 +1260,35 @@ static struct socket_info *swrap_get_socket_info(int si_index)
 static int swrap_get_refcount(struct socket_info *si)
 {
 	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
-	return sic->refcount;
+	return sic->meta.refcount;
 }
 
 static void swrap_inc_refcount(struct socket_info *si)
 {
 	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
 
-	sic->refcount += 1;
+	sic->meta.refcount += 1;
 }
 
 static void swrap_dec_refcount(struct socket_info *si)
 {
 	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
 
-	sic->refcount -= 1;
+	sic->meta.refcount -= 1;
 }
 
 static int swrap_get_next_free(struct socket_info *si)
 {
 	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
 
-	return sic->next_free;
+	return sic->meta.next_free;
 }
 
 static void swrap_set_next_free(struct socket_info *si, int next_free)
 {
 	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
-	sic->next_free = next_free;
+
+	sic->meta.next_free = next_free;
 }
 
 static const char *socket_wrapper_dir(void)
@@ -1394,7 +1400,7 @@ static void socket_wrapper_init_sockets(void)
 
 	for (i = 0; i < max_sockets; i++) {
 		swrap_set_next_free(&sockets[i].info, i+1);
-		sockets[i].mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
+		sockets[i].meta.mutex = (pthread_mutex_t)PTHREAD_MUTEX_INITIALIZER;
 	}
 
 	/* mark the end of the free list */
