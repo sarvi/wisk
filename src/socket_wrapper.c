@@ -1213,6 +1213,16 @@ static void swrap_dec_refcount(struct socket_info *si)
 	si->refcount -= 1;
 }
 
+static int swrap_get_next_free(struct socket_info *si)
+{
+	return si->next_free;
+}
+
+static void swrap_set_next_free(struct socket_info *si, int next_free)
+{
+	si->next_free = next_free;
+}
+
 static const char *socket_wrapper_dir(void)
 {
 	const char *s = getenv("SOCKET_WRAPPER_DIR");
@@ -1315,10 +1325,10 @@ static void socket_wrapper_init_sockets(void)
 	first_free = 0;
 
 	for (i = 0; i < max_sockets; i++) {
-		sockets[i].next_free = i+1;
+		swrap_set_next_free(&sockets[i], i+1);
 	}
 
-	sockets[max_sockets-1].next_free = -1;
+	swrap_set_next_free(&sockets[max_sockets-1], -1);
 }
 
 bool socket_wrapper_enabled(void)
@@ -1361,9 +1371,9 @@ static int socket_wrapper_first_free_index(void)
 		return -1;
 	}
 
-	next_free = sockets[first_free].next_free;
+	next_free = swrap_get_next_free(&sockets[first_free]);
 	ZERO_STRUCT(sockets[first_free]);
-	sockets[first_free].next_free = next_free;
+	swrap_set_next_free(&sockets[first_free], next_free);
 
 	return first_free;
 }
@@ -1889,7 +1899,7 @@ static void swrap_remove_stale(int fd)
 		unlink(si->un_addr.sun_path);
 	}
 
-	si->next_free = first_free;
+	swrap_set_next_free(si, first_free);
 	first_free = si_index;
 }
 
@@ -2939,8 +2949,8 @@ static int swrap_socket(int family, int type, int protocol)
 	 * zeroed the si, so we are starting from refcount 0
 	 */
 	swrap_inc_refcount(si);
-	first_free = si->next_free;
-	si->next_free = 0;
+	first_free = swrap_get_next_free(si);
+	swrap_set_next_free(si, 0);
 
 	fi->fd = fd;
 	fi->si_index = idx;
@@ -3169,8 +3179,8 @@ static int swrap_accept(int s,
 	memcpy(&child_si->myname.sa.ss, &in_my_addr.sa.ss, in_my_addr.sa_socklen);
 
 	swrap_inc_refcount(child_si);
-	first_free = child_si->next_free;
-	child_si->next_free = 0;
+	first_free = swrap_get_next_free(child_si);
+	swrap_set_next_free(child_si, 0);
 
 	child_fi->si_index = idx;
 
@@ -5701,7 +5711,7 @@ static int swrap_close(int fd)
 		unlink(si->un_addr.sun_path);
 	}
 
-	si->next_free = first_free;
+	swrap_set_next_free(si, first_free);
 	first_free = si_index;
 
 	return ret;
