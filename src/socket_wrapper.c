@@ -3173,8 +3173,8 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 			type = SOCKET_TYPE_CHAR_UDP;
 			break;
 		default:
-		    errno = ESOCKTNOSUPPORT;
-		    return -1;
+			errno = ESOCKTNOSUPPORT;
+			return -1;
 		}
 
 		memset(&in, 0, sizeof(in));
