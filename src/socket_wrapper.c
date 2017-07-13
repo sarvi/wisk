@@ -4016,7 +4016,9 @@ static int swrap_setsockopt(int s, int level, int optname,
 				       optname,
 				       optval,
 				       optlen);
-	} else if (level == IPPROTO_TCP) {
+	}
+
+	if (level == IPPROTO_TCP) {
 		switch (optname) {
 #ifdef TCP_NODELAY
 		case TCP_NODELAY: {
