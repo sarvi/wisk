@@ -5692,14 +5692,18 @@ static int swrap_close(int fd)
 	}
 
 	si_index = fi->si_index;
+	si = swrap_get_socket_info(si_index);
 
 	SWRAP_DLIST_REMOVE(socket_fds, fi);
-	free(fi);
 
 	ret = libc_close(fd);
 
-	si = swrap_get_socket_info(si_index);
+	swrap_set_next_free(si, first_free);
+	first_free = si_index;
+
 	swrap_dec_refcount(si);
+
+	free(fi);
 
 	if (swrap_get_refcount(si) > 0) {
 		/* there are still references left */
@@ -5718,9 +5722,6 @@ static int swrap_close(int fd)
 	if (si->un_addr.sun_path[0] != '\0') {
 		unlink(si->un_addr.sun_path);
 	}
-
-	swrap_set_next_free(si, first_free);
-	first_free = si_index;
 
 	return ret;
 }
