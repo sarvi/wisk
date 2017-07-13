@@ -3174,7 +3174,8 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 			break;
 		default:
 			errno = ESOCKTNOSUPPORT;
-			return -1;
+			ret = -1;
+			goto done;
 		}
 
 		memset(&in, 0, sizeof(in));
@@ -3194,7 +3195,8 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 
 		if (si->family != family) {
 			errno = ENETUNREACH;
-			return -1;
+			ret = -1;
+			goto done;
 		}
 
 		switch (si->type) {
@@ -3206,7 +3208,8 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 			break;
 		default:
 			errno = ESOCKTNOSUPPORT;
-			return -1;
+			ret = -1;
+			goto done;
 		}
 
 		memset(&in6, 0, sizeof(in6));
@@ -3223,7 +3226,8 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 #endif
 	default:
 		errno = ESOCKTNOSUPPORT;
-		return -1;
+		ret = -1;
+		goto done;
 	}
 
 	if (autobind_start > 60000) {
@@ -3239,7 +3243,7 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 
 		ret = libc_bind(fd, &un_addr.sa.s, un_addr.sa_socklen);
 		if (ret == -1) {
-			return ret;
+			goto done;
 		}
 
 		si->un_addr = un_addr.sa.un;
@@ -3256,13 +3260,17 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 					   socket_wrapper_default_iface(),
 					   0);
 		errno = ENFILE;
-		return -1;
+		ret = -1;
+		goto done;
 	}
 
 	si->family = family;
 	set_port(si->family, port, &si->myname);
 
-	return 0;
+	ret = 0;
+
+done:
+	return ret;
 }
 
 /****************************************************************************
