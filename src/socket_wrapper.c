@@ -3842,6 +3842,7 @@ static int swrap_getsockopt(int s, int level, int optname,
 			    void *optval, socklen_t *optlen)
 {
 	struct socket_info *si = find_socket_info(s);
+	int ret;
 
 	if (!si) {
 		return libc_getsockopt(s,
@@ -3858,12 +3859,14 @@ static int swrap_getsockopt(int s, int level, int optname,
 			if (optval == NULL || optlen == NULL ||
 			    *optlen < (socklen_t)sizeof(int)) {
 				errno = EINVAL;
-				return -1;
+				ret = -1;
+				goto done;
 			}
 
 			*optlen = sizeof(int);
 			*(int *)optval = si->family;
-			return 0;
+			ret = 0;
+			goto done;
 #endif /* SO_DOMAIN */
 
 #ifdef SO_PROTOCOL
@@ -3871,29 +3874,34 @@ static int swrap_getsockopt(int s, int level, int optname,
 			if (optval == NULL || optlen == NULL ||
 			    *optlen < (socklen_t)sizeof(int)) {
 				errno = EINVAL;
-				return -1;
+				ret = -1;
+				goto done;
 			}
 
 			*optlen = sizeof(int);
 			*(int *)optval = si->protocol;
-			return 0;
+			ret = 0;
+			goto done;
 #endif /* SO_PROTOCOL */
 		case SO_TYPE:
 			if (optval == NULL || optlen == NULL ||
 			    *optlen < (socklen_t)sizeof(int)) {
 				errno = EINVAL;
-				return -1;
+				ret = -1;
+				goto done;
 			}
 
 			*optlen = sizeof(int);
 			*(int *)optval = si->type;
-			return 0;
+			ret = 0;
+			goto done;
 		default:
-			return libc_getsockopt(s,
-					       level,
-					       optname,
-					       optval,
-					       optlen);
+			ret = libc_getsockopt(s,
+					      level,
+					      optname,
+					      optval,
+					      optlen);
+			goto done;
 		}
 	} else if (level == IPPROTO_TCP) {
 		switch (optname) {
@@ -3907,13 +3915,15 @@ static int swrap_getsockopt(int s, int level, int optname,
 			if (optval == NULL || optlen == NULL ||
 			    *optlen < (socklen_t)sizeof(int)) {
 				errno = EINVAL;
-				return -1;
+				ret = -1;
+				goto done;
 			}
 
 			*optlen = sizeof(int);
 			*(int *)optval = si->tcp_nodelay;
 
-			return 0;
+			ret = 0;
+			goto done;
 #endif /* TCP_NODELAY */
 		default:
 			break;
@@ -3921,7 +3931,10 @@ static int swrap_getsockopt(int s, int level, int optname,
 	}
 
 	errno = ENOPROTOOPT;
-	return -1;
+	ret = -1;
+
+done:
+	return ret;
 }
 
 #ifdef HAVE_ACCEPT_PSOCKLEN_T
