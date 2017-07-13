@@ -1928,14 +1928,19 @@ static void swrap_remove_stale(int fd)
 		return;
 	}
 
+	SWRAP_LOG(SWRAP_LOG_TRACE, "remove stale wrapper for %d", fd);
+
 	si_index = fi->si_index;
 
-	SWRAP_LOG(SWRAP_LOG_TRACE, "remove stale wrapper for %d", fd);
-	SWRAP_DLIST_REMOVE(socket_fds, fi);
-	free(fi);
-
 	si = swrap_get_socket_info(si_index);
+
+	SWRAP_DLIST_REMOVE(socket_fds, fi);
+
+	swrap_set_next_free(si, first_free);
+	first_free = si_index;
 	swrap_dec_refcount(si);
+
+	free(fi);
 
 	if (swrap_get_refcount(si) > 0) {
 		return;
@@ -1944,9 +1949,6 @@ static void swrap_remove_stale(int fd)
 	if (si->un_addr.sun_path[0] != '\0') {
 		unlink(si->un_addr.sun_path);
 	}
-
-	swrap_set_next_free(si, first_free);
-	first_free = si_index;
 }
 
 static int sockaddr_convert_to_un(struct socket_info *si,
