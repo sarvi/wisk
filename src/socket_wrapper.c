@@ -3954,6 +3954,7 @@ static int swrap_setsockopt(int s, int level, int optname,
 			    const void *optval, socklen_t optlen)
 {
 	struct socket_info *si = find_socket_info(s);
+	int ret;
 
 	if (!si) {
 		return libc_setsockopt(s,
@@ -3982,17 +3983,20 @@ static int swrap_setsockopt(int s, int level, int optname,
 			if (optval == NULL || optlen == 0 ||
 			    optlen < (socklen_t)sizeof(int)) {
 				errno = EINVAL;
-				return -1;
+				ret = -1;
+				goto done;
 			}
 
 			i = *discard_const_p(int, optval);
 			if (i != 0 && i != 1) {
 				errno = EINVAL;
-				return -1;
+				ret = -1;
+				goto done;
 			}
 			si->tcp_nodelay = i;
 
-			return 0;
+			ret = 0;
+			goto done;
 		}
 #endif /* TCP_NODELAY */
 		default:
@@ -4009,7 +4013,8 @@ static int swrap_setsockopt(int s, int level, int optname,
 			}
 #endif /* IP_PKTINFO */
 		}
-		return 0;
+		ret = 0;
+		goto done;
 #ifdef HAVE_IPV6
 	case AF_INET6:
 		if (level == IPPROTO_IPV6) {
@@ -4019,12 +4024,17 @@ static int swrap_setsockopt(int s, int level, int optname,
 			}
 #endif /* IPV6_PKTINFO */
 		}
-		return 0;
+		ret = 0;
+		goto done;
 #endif
 	default:
 		errno = ENOPROTOOPT;
-		return -1;
+		ret = -1;
+		goto done;
 	}
+
+done:
+	return ret;
 }
 
 int setsockopt(int s, int level, int optname,
