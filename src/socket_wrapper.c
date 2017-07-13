@@ -3294,24 +3294,26 @@ static int swrap_connect(int s, const struct sockaddr *serv_addr,
 	if (si->bound == 0) {
 		ret = swrap_auto_bind(s, si, serv_addr->sa_family);
 		if (ret == -1) {
-			return -1;
+			goto done;
 		}
 	}
 
 	if (si->family != serv_addr->sa_family) {
 		errno = EINVAL;
-		return -1;
+		ret = -1;
+		goto done;
 	}
 
 	ret = sockaddr_convert_to_un(si, serv_addr,
 				     addrlen, &un_addr.sa.un, 0, &bcast);
 	if (ret == -1) {
-		return -1;
+		goto done;
 	}
 
 	if (bcast) {
 		errno = ENETUNREACH;
-		return -1;
+		ret = -1;
+		goto done;
 	}
 
 	if (si->type == SOCK_DGRAM) {
@@ -3371,6 +3373,7 @@ static int swrap_connect(int s, const struct sockaddr *serv_addr,
 		swrap_pcap_dump_packet(si, serv_addr, SWRAP_CONNECT_UNREACH, NULL, 0);
 	}
 
+done:
 	return ret;
 }
 
