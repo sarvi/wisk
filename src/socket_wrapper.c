@@ -107,6 +107,12 @@ enum swrap_dbglvl_e {
 #define DESTRUCTOR_ATTRIBUTE
 #endif
 
+#ifdef HAVE_FALLTHROUGH_ATTRIBUTE
+#define FALL_THROUGH __attribute__ ((fallthrough))
+#else
+#define FALL_THROUGH
+#endif
+
 #ifdef HAVE_ADDRESS_SANITIZER_ATTRIBUTE
 #define DO_NOT_SANITIZE_ADDRESS_ATTRIBUTE __attribute__((no_sanitize_address))
 #else
@@ -587,7 +593,7 @@ static void *swrap_load_lib_handle(enum swrap_lib lib)
 
 	switch (lib) {
 	case SWRAP_LIBNSL:
-		/* FALL TROUGH */
+		FALL_THROUGH;
 	case SWRAP_LIBSOCKET:
 #ifdef HAVE_LIBSOCKET
 		handle = swrap.libc.socket_handle;
@@ -606,7 +612,7 @@ static void *swrap_load_lib_handle(enum swrap_lib lib)
 		}
 		break;
 #endif
-		/* FALL TROUGH */
+		FALL_THROUGH;
 	case SWRAP_LIBC:
 		handle = swrap.libc.handle;
 #ifdef LIBC_SO
@@ -1861,7 +1867,7 @@ static int sockaddr_convert_to_un(struct socket_info *si,
 		 * AF_UNSPEC is mapped to AF_INET and must be treated here.
 		 */
 
-		/* FALL THROUGH */
+		FALL_THROUGH;
 	}
 	case AF_INET:
 #ifdef HAVE_IPV6
@@ -2790,12 +2796,12 @@ static int swrap_socket(int family, int type, int protocol)
 		if (real_type == SOCK_STREAM) {
 			break;
 		}
-		/*fall through*/
+		FALL_THROUGH;
 	case 17:
 		if (real_type == SOCK_DGRAM) {
 			break;
 		}
-		/*fall through*/
+		FALL_THROUGH;
 	default:
 		errno = EPROTONOSUPPORT;
 		return -1;
