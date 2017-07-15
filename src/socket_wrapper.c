@@ -185,6 +185,9 @@ enum swrap_dbglvl_e {
 # define SWRAP_UNLOCK_ALL \
 	SWRAP_UNLOCK(libc_symbol_binding); \
 
+#define SOCKET_INFO_CONTAINER(si) \
+	(struct socket_info_container *)(si)
+
 #define SWRAP_DLIST_ADD(list,item) do { \
 	if (!(list)) { \
 		(item)->prev	= NULL; \
@@ -301,10 +304,6 @@ int first_free;
 
 struct socket_info
 {
-	unsigned int refcount;
-
-	int next_free;
-
 	int family;
 	int type;
 	int protocol;
@@ -329,7 +328,14 @@ struct socket_info
 	} io;
 };
 
-static struct socket_info *sockets;
+struct socket_info_container
+{
+	struct socket_info info;
+	unsigned int refcount;
+	int next_free;
+};
+
+static struct socket_info_container *sockets;
 static size_t max_sockets = 0;
 
 /*
@@ -1200,27 +1206,35 @@ static struct socket_info *swrap_get_socket_info(int si_index)
 
 static int swrap_get_refcount(struct socket_info *si)
 {
-	return si->refcount;
+	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
+	return sic->refcount;
 }
 
 static void swrap_inc_refcount(struct socket_info *si)
 {
-	si->refcount += 1;
+	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
+
+	sic->refcount += 1;
 }
 
 static void swrap_dec_refcount(struct socket_info *si)
 {
-	si->refcount -= 1;
+	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
+
+	sic->refcount -= 1;
 }
 
 static int swrap_get_next_free(struct socket_info *si)
 {
-	return si->next_free;
+	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
+
+	return sic->next_free;
 }
 
 static void swrap_set_next_free(struct socket_info *si, int next_free)
 {
-	si->next_free = next_free;
+	struct socket_info_container *sic = SOCKET_INFO_CONTAINER(si);
+	sic->next_free = next_free;
 }
 
 static const char *socket_wrapper_dir(void)
@@ -1313,8 +1327,8 @@ static void socket_wrapper_init_sockets(void)
 
 	max_sockets = socket_wrapper_max_sockets();
 
-	sockets = (struct socket_info *)calloc(max_sockets,
-					       sizeof(struct socket_info));
+	sockets = (struct socket_info_container *)calloc(max_sockets,
+					sizeof(struct socket_info_container));
 
 	if (sockets == NULL) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
@@ -1325,10 +1339,11 @@ static void socket_wrapper_init_sockets(void)
 	first_free = 0;
 
 	for (i = 0; i < max_sockets; i++) {
-		swrap_set_next_free(&sockets[i], i+1);
+		swrap_set_next_free(&sockets[i].info, i+1);
 	}
 
-	swrap_set_next_free(&sockets[max_sockets-1], -1);
+	/* mark the end of the free list */
+	swrap_set_next_free(&sockets[max_sockets-1].info, -1);
 }
 
 bool socket_wrapper_enabled(void)
