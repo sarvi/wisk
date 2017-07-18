@@ -1365,6 +1365,7 @@ static unsigned int socket_wrapper_default_iface(void)
  */
 static int socket_wrapper_first_free_index(void)
 {
+	struct socket_info *si = NULL;
 	int next_free;
 
 	if (first_free == -1) {
@@ -1372,9 +1373,10 @@ static int socket_wrapper_first_free_index(void)
 		return -1;
 	}
 
-	next_free = swrap_get_next_free(&sockets[first_free]);
-	ZERO_STRUCT(sockets[first_free]);
-	swrap_set_next_free(&sockets[first_free], next_free);
+	si = swrap_get_socket_info(first_free);
+	next_free = swrap_get_next_free(si);
+	ZERO_STRUCTP(si);
+	swrap_set_next_free(si, next_free);
 
 	return first_free;
 }
