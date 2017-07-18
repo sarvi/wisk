@@ -63,7 +63,7 @@ static void test_max_sockets(void **state)
 	/* no free space for sockets left */
 	rc = _socket(&s[MAX_SOCKETS]);
 	assert_int_equal(rc, -1);
-	assert_int_equal(errno, ENOMEM);
+	assert_int_equal(errno, ENFILE);
 
 	/* closing a socket frees up space */
 	close(s[0]);
@@ -73,7 +73,7 @@ static void test_max_sockets(void **state)
 	/* but just one */
 	rc = _socket(&s[MAX_SOCKETS]);
 	assert_int_equal(rc, -1);
-	assert_int_equal(errno, ENOMEM);
+	assert_int_equal(errno, ENFILE);
 
 	for (i = 0; i < MAX_SOCKETS; i++) {
 		close(s[i]);

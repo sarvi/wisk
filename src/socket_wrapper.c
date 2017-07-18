@@ -1368,6 +1368,7 @@ static int socket_wrapper_first_free_index(void)
 	int next_free;
 
 	if (first_free == -1) {
+		errno = ENFILE;
 		return -1;
 	}
 
@@ -2897,7 +2898,6 @@ static int swrap_socket(int family, int type, int protocol)
 
 	idx = socket_wrapper_first_free_index();
 	if (idx == -1) {
-		errno = ENOMEM;
 		return -1;
 	}
 
@@ -3113,7 +3113,6 @@ static int swrap_accept(int s,
 
 	idx = socket_wrapper_first_free_index();
 	if (idx == -1) {
-		errno = ENOMEM;
 		return -1;
 	}
 
