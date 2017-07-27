@@ -23,9 +23,4 @@ set_target_properties(
         ${LIBRARY_SOVERSION}
 )
 
-# This needs to be at the end
-if (POLICY CMP0026)
-    cmake_policy(SET CMP0026 OLD)
-endif()
-get_target_property(SWRAP_LOCATION socket_wrapper LOCATION)
-set(SOCKET_WRAPPER_LOCATION ${SWRAP_LOCATION} PARENT_SCOPE)
+set(SOCKET_WRAPPER_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}socket_wrapper${CMAKE_SHARED_LIBRARY_SUFFIX}" PARENT_SCOPE)
