@@ -107,11 +107,13 @@ enum swrap_dbglvl_e {
 #define DESTRUCTOR_ATTRIBUTE
 #endif
 
-#ifdef HAVE_FALLTHROUGH_ATTRIBUTE
-#define FALL_THROUGH __attribute__ ((fallthrough))
-#else
-#define FALL_THROUGH
-#endif
+#ifndef FALL_THROUGH
+# ifdef HAVE_FALLTHROUGH_ATTRIBUTE
+#  define FALL_THROUGH __attribute__ ((fallthrough))
+# else /* HAVE_FALLTHROUGH_ATTRIBUTE */
+#  define FALL_THROUGH
+# endif /* HAVE_FALLTHROUGH_ATTRIBUTE */
+#endif /* FALL_THROUGH */
 
 #ifdef HAVE_ADDRESS_SANITIZER_ATTRIBUTE
 #define DO_NOT_SANITIZE_ADDRESS_ATTRIBUTE __attribute__((no_sanitize_address))
