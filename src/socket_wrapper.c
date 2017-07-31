@@ -367,6 +367,10 @@ static void swrap_log(enum swrap_dbglvl_e dbglvl,
 		lvl = atoi(d);
 	}
 
+	if (lvl < dbglvl) {
+		return;
+	}
+
 	va_start(va, format);
 	vsnprintf(buffer, sizeof(buffer), format, va);
 	va_end(va);
