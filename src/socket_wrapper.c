@@ -350,10 +350,6 @@ bool socket_wrapper_enabled(void);
 void swrap_constructor(void) CONSTRUCTOR_ATTRIBUTE;
 void swrap_destructor(void) DESTRUCTOR_ATTRIBUTE;
 
-#ifdef NDEBUG
-# define SWRAP_LOG(...)
-#else
-
 static void swrap_log(enum swrap_dbglvl_e dbglvl, const char *func, const char *format, ...) PRINTF_ATTRIBUTE(3, 4);
 # define SWRAP_LOG(dbglvl, ...) swrap_log((dbglvl), __func__, __VA_ARGS__)
 
@@ -400,7 +396,6 @@ static void swrap_log(enum swrap_dbglvl_e dbglvl,
 		}
 	}
 }
-#endif
 
 /*********************************************************
  * SWRAP LOADING LIBC FUNCTIONS
@@ -566,7 +561,6 @@ enum swrap_lib {
     SWRAP_LIBSOCKET,
 };
 
-#ifndef NDEBUG
 static const char *swrap_str_lib(enum swrap_lib lib)
 {
 	switch (lib) {
@@ -581,7 +575,6 @@ static const char *swrap_str_lib(enum swrap_lib lib)
 	/* Compiler would warn us about unhandled enum value if we get here */
 	return "unknown";
 }
-#endif
 
 static void *swrap_load_lib_handle(enum swrap_lib lib)
 {
