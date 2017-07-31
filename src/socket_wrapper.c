@@ -361,6 +361,7 @@ static void swrap_log(enum swrap_dbglvl_e dbglvl,
 	va_list va;
 	const char *d;
 	unsigned int lvl = 0;
+	const char *prefix = "SWRAP";
 
 	d = getenv("SOCKET_WRAPPER_DEBUGLEVEL");
 	if (d != NULL) {
@@ -375,30 +376,24 @@ static void swrap_log(enum swrap_dbglvl_e dbglvl,
 	vsnprintf(buffer, sizeof(buffer), format, va);
 	va_end(va);
 
-	if (lvl >= dbglvl) {
-		switch (dbglvl) {
-			case SWRAP_LOG_ERROR:
-				fprintf(stderr,
-					"SWRAP_ERROR(%d) - %s: %s\n",
-					(int)getpid(), func, buffer);
-				break;
-			case SWRAP_LOG_WARN:
-				fprintf(stderr,
-					"SWRAP_WARN(%d) - %s: %s\n",
-					(int)getpid(), func, buffer);
-				break;
-			case SWRAP_LOG_DEBUG:
-				fprintf(stderr,
-					"SWRAP_DEBUG(%d) - %s: %s\n",
-					(int)getpid(), func, buffer);
-				break;
-			case SWRAP_LOG_TRACE:
-				fprintf(stderr,
-					"SWRAP_TRACE(%d) - %s: %s\n",
-					(int)getpid(), func, buffer);
-				break;
-		}
+	switch (dbglvl) {
+		case SWRAP_LOG_ERROR:
+			prefix = "SWRAP_ERROR";
+			break;
+		case SWRAP_LOG_WARN:
+			prefix = "SWRAP_WARN";
+			break;
+		case SWRAP_LOG_DEBUG:
+			prefix = "SWRAP_DEBUG";
+			break;
+		case SWRAP_LOG_TRACE:
+			prefix = "SWRAP_TRACE";
+			break;
 	}
+
+	fprintf(stderr,
+		"%s(%d) - %s: %s\n",
+		prefix, (int)getpid(), func, buffer);
 }
 
 /*********************************************************
