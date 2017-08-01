@@ -774,22 +774,14 @@ static int libc_eventfd(int count, int flags)
 DO_NOT_SANITIZE_ADDRESS_ATTRIBUTE
 static int libc_vfcntl(int fd, int cmd, va_list ap)
 {
-	long int args[4];
+	void *arg;
 	int rc;
-	int i;
 
 	swrap_bind_symbol_libc(fcntl);
 
-	for (i = 0; i < 4; i++) {
-		args[i] = va_arg(ap, long int);
-	}
+	arg = va_arg(ap, void *);
 
-	rc = swrap.libc.symbols._libc_fcntl.f(fd,
-					      cmd,
-					      args[0],
-					      args[1],
-					      args[2],
-					      args[3]);
+	rc = swrap.libc.symbols._libc_fcntl.f(fd, cmd, arg);
 
 	return rc;
 }
