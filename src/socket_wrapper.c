@@ -822,22 +822,14 @@ static int libc_getsockopt(int sockfd,
 DO_NOT_SANITIZE_ADDRESS_ATTRIBUTE
 static int libc_vioctl(int d, unsigned long int request, va_list ap)
 {
-	long int args[4];
+	void *arg;
 	int rc;
-	int i;
 
 	swrap_bind_symbol_libc(ioctl);
 
-	for (i = 0; i < 4; i++) {
-		args[i] = va_arg(ap, long int);
-	}
+	arg = va_arg(ap, void *);
 
-	rc = swrap.libc.symbols._libc_ioctl.f(d,
-					      request,
-					      args[0],
-					      args[1],
-					      args[2],
-					      args[3]);
+	rc = swrap.libc.symbols._libc_ioctl.f(d, request, arg);
 
 	return rc;
 }
