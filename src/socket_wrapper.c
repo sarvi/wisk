@@ -859,13 +859,14 @@ static FILE *libc_fopen64(const char *name, const char *mode)
 
 static int libc_vopen(const char *pathname, int flags, va_list ap)
 {
-	long int mode = 0;
+	int mode = 0;
 	int fd;
 
 	swrap_bind_symbol_libc(open);
 
-	mode = va_arg(ap, long int);
-
+	if (flags & O_CREAT) {
+		mode = va_arg(ap, int);
+	}
 	fd = swrap.libc.symbols._libc_open.f(pathname, flags, (mode_t)mode);
 
 	return fd;
@@ -886,13 +887,14 @@ static int libc_open(const char *pathname, int flags, ...)
 #ifdef HAVE_OPEN64
 static int libc_vopen64(const char *pathname, int flags, va_list ap)
 {
-	long int mode = 0;
+	int mode = 0;
 	int fd;
 
 	swrap_bind_symbol_libc(open64);
 
-	mode = va_arg(ap, long int);
-
+	if (flags & O_CREAT) {
+		mode = va_arg(ap, int);
+	}
 	fd = swrap.libc.symbols._libc_open64.f(pathname, flags, (mode_t)mode);
 
 	return fd;
@@ -901,14 +903,18 @@ static int libc_vopen64(const char *pathname, int flags, va_list ap)
 
 static int libc_vopenat(int dirfd, const char *path, int flags, va_list ap)
 {
-	long int mode = 0;
+	int mode = 0;
 	int fd;
 
 	swrap_bind_symbol_libc(openat);
 
-	mode = va_arg(ap, long int);
-
-	fd = swrap.libc.symbols._libc_openat.f(dirfd, path, flags, (mode_t)mode);
+	if (flags & O_CREAT) {
+		mode = va_arg(ap, int);
+	}
+	fd = swrap.libc.symbols._libc_openat.f(dirfd,
+					       path,
+					       flags,
+					       (mode_t)mode);
 
 	return fd;
 }
