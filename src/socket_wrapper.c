@@ -2816,8 +2816,10 @@ int signalfd(int fd, const sigset_t *mask, int flags)
 
 static int swrap_socket(int family, int type, int protocol)
 {
-	struct socket_info *si;
-	struct socket_info_fd *fi;
+	struct socket_info *si = NULL;
+	struct socket_info _si = { 0 };
+	struct socket_info *free_si = NULL;
+	struct socket_info_fd *fi = NULL;
 	int fd;
 	int idx;
 	int real_type = type;
@@ -2898,13 +2900,7 @@ static int swrap_socket(int family, int type, int protocol)
 	/* Check if we have a stale fd and remove it */
 	swrap_remove_stale(fd);
 
-	idx = socket_wrapper_first_free_index();
-	if (idx == -1) {
-		return -1;
-	}
-
-	si = swrap_get_socket_info(idx);
-
+	si = &_si;
 	si->family = family;
 
 	/* however, the rest of the socket_wrapper code expects just
@@ -2946,13 +2942,19 @@ static int swrap_socket(int family, int type, int protocol)
 		return -1;
 	}
 
-	/*
-	 * note: as side-effect, socket_wrapper_first_free_index
-	 * zeroed the si, so we are starting from refcount 0
-	 */
-	swrap_inc_refcount(si);
-	first_free = swrap_get_next_free(si);
-	swrap_set_next_free(si, 0);
+	idx = socket_wrapper_first_free_index();
+	if (idx == -1) {
+		return -1;
+	}
+
+	free_si = swrap_get_socket_info(idx);
+
+	first_free = swrap_get_next_free(free_si);
+
+	*free_si = _si;
+
+	swrap_inc_refcount(free_si);
+	swrap_set_next_free(free_si, 0);
 
 	fi->fd = fd;
 	fi->si_index = idx;
