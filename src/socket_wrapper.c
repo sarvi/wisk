@@ -442,9 +442,9 @@ typedef int (*__libc_getsockopt)(int sockfd,
 			       socklen_t *optlen);
 typedef int (*__libc_ioctl)(int d, unsigned long int request, ...);
 typedef int (*__libc_listen)(int sockfd, int backlog);
-typedef int (*__libc_open)(const char *pathname, int flags, mode_t mode);
+typedef int (*__libc_open)(const char *pathname, int flags, ...);
 #ifdef HAVE_OPEN64
-typedef int (*__libc_open64)(const char *pathname, int flags, mode_t mode);
+typedef int (*__libc_open64)(const char *pathname, int flags, ...);
 #endif /* HAVE_OPEN64 */
 typedef int (*__libc_openat)(int dirfd, const char *path, int flags, ...);
 typedef int (*__libc_pipe)(int pipefd[2]);
