@@ -1374,28 +1374,6 @@ static unsigned int socket_wrapper_default_iface(void)
 	return 1;/* 127.0.0.1 */
 }
 
-/*
- * Return the first free entry (if any) and make
- * it re-usable again (by nulling it out)
- */
-static int socket_wrapper_first_free_index(void)
-{
-	struct socket_info *si = NULL;
-	int next_free;
-
-	if (first_free == -1) {
-		errno = ENFILE;
-		return -1;
-	}
-
-	si = swrap_get_socket_info(first_free);
-	next_free = swrap_get_next_free(si);
-	ZERO_STRUCTP(si);
-	swrap_set_next_free(si, next_free);
-
-	return first_free;
-}
-
 static int swrap_add_socket_info(struct socket_info *si_input)
 {
 	struct socket_info *si = NULL;
