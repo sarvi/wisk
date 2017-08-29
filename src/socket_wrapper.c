@@ -3094,7 +3094,7 @@ static int swrap_accept(int s,
 			int flags)
 {
 	struct socket_info *parent_si, *child_si;
-	struct socket_info_fd *child_fi;
+	struct socket_info new_si = { 0 };
 	int fd;
 	int idx;
 	struct swrap_address un_addr = {
@@ -3158,21 +3158,7 @@ static int swrap_accept(int s,
 		return ret;
 	}
 
-	idx = socket_wrapper_first_free_index();
-	if (idx == -1) {
-		return -1;
-	}
-
-	child_si = swrap_get_socket_info(idx);
-
-	child_fi = (struct socket_info_fd *)calloc(1, sizeof(struct socket_info_fd));
-	if (child_fi == NULL) {
-		close(fd);
-		errno = ENOMEM;
-		return -1;
-	}
-
-	child_fi->fd = fd;
+	child_si = &new_si;
 
 	child_si->family = parent_si->family;
 	child_si->type = parent_si->type;
@@ -3198,7 +3184,6 @@ static int swrap_accept(int s,
 			       &un_my_addr.sa.s,
 			       &un_my_addr.sa_socklen);
 	if (ret == -1) {
-		free(child_fi);
 		close(fd);
 		return ret;
 	}
@@ -3210,7 +3195,6 @@ static int swrap_accept(int s,
 				       &in_my_addr.sa.s,
 				       &in_my_addr.sa_socklen);
 	if (ret == -1) {
-		free(child_fi);
 		close(fd);
 		return ret;
 	}
@@ -3224,18 +3208,18 @@ static int swrap_accept(int s,
 	};
 	memcpy(&child_si->myname.sa.ss, &in_my_addr.sa.ss, in_my_addr.sa_socklen);
 
-	swrap_inc_refcount(child_si);
-	first_free = swrap_get_next_free(child_si);
-	swrap_set_next_free(child_si, 0);
-
-	child_fi->si_index = idx;
-
-	SWRAP_DLIST_ADD(socket_fds, child_fi);
+	idx = swrap_create_socket(&new_si, fd);
+	if (idx == -1) {
+		close (fd);
+		return -1;
+	}
 
 	if (addr != NULL) {
-		swrap_pcap_dump_packet(child_si, addr, SWRAP_ACCEPT_SEND, NULL, 0);
-		swrap_pcap_dump_packet(child_si, addr, SWRAP_ACCEPT_RECV, NULL, 0);
-		swrap_pcap_dump_packet(child_si, addr, SWRAP_ACCEPT_ACK, NULL, 0);
+		struct socket_info *si = swrap_get_socket_info(idx);
+
+		swrap_pcap_dump_packet(si, addr, SWRAP_ACCEPT_SEND, NULL, 0);
+		swrap_pcap_dump_packet(si, addr, SWRAP_ACCEPT_RECV, NULL, 0);
+		swrap_pcap_dump_packet(si, addr, SWRAP_ACCEPT_ACK, NULL, 0);
 	}
 
 	return fd;
