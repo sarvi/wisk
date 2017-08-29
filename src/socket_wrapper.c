@@ -1396,6 +1396,56 @@ static int socket_wrapper_first_free_index(void)
 	return first_free;
 }
 
+static int swrap_add_socket_info(struct socket_info *si_input)
+{
+	struct socket_info *si = NULL;
+	int si_index;
+
+	if (si_input == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (first_free == -1) {
+		errno = ENFILE;
+		return -1;
+	}
+
+	si_index = first_free;
+	si = swrap_get_socket_info(si_index);
+
+	first_free = swrap_get_next_free(si);
+	*si = *si_input;
+	swrap_inc_refcount(si);
+
+	return si_index;
+}
+
+static int swrap_create_socket(struct socket_info *si, int fd)
+{
+	struct socket_info_fd *fi = NULL;
+	int idx;
+
+	fi = (struct socket_info_fd *)calloc(1, sizeof(struct socket_info_fd));
+	if (fi == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	idx = swrap_add_socket_info(si);
+	if (idx == -1) {
+		free(fi);
+		return -1;
+	}
+
+	fi->fd = fd;
+	fi->si_index = idx;
+
+	SWRAP_DLIST_ADD(socket_fds, fi);
+
+	return idx;
+}
+
 static int convert_un_in(const struct sockaddr_un *un, struct sockaddr *in, socklen_t *len)
 {
 	unsigned int iface;
