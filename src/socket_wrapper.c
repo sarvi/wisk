@@ -2883,10 +2883,8 @@ static int swrap_socket(int family, int type, int protocol)
 {
 	struct socket_info *si = NULL;
 	struct socket_info _si = { 0 };
-	struct socket_info *free_si = NULL;
-	struct socket_info_fd *fi = NULL;
 	int fd;
-	int idx;
+	int ret;
 	int real_type = type;
 
 	/*
@@ -3001,35 +2999,15 @@ static int swrap_socket(int family, int type, int protocol)
 		return -1;
 	}
 
-	fi = (struct socket_info_fd *)calloc(1, sizeof(struct socket_info_fd));
-	if (fi == NULL) {
-		errno = ENOMEM;
+	ret = swrap_create_socket(si, fd);
+	if (ret == -1) {
 		return -1;
 	}
-
-	idx = socket_wrapper_first_free_index();
-	if (idx == -1) {
-		return -1;
-	}
-
-	free_si = swrap_get_socket_info(idx);
-
-	first_free = swrap_get_next_free(free_si);
-
-	*free_si = _si;
-
-	swrap_inc_refcount(free_si);
-	swrap_set_next_free(free_si, 0);
-
-	fi->fd = fd;
-	fi->si_index = idx;
-
-	SWRAP_DLIST_ADD(socket_fds, fi);
 
 	SWRAP_LOG(SWRAP_LOG_TRACE,
 		  "Created %s socket for protocol %s",
-		  si->family == AF_INET ? "IPv4" : "IPv6",
-		  si->type == SOCK_DGRAM ? "UDP" : "TCP");
+		  family == AF_INET ? "IPv4" : "IPv6",
+		  real_type == SOCK_DGRAM ? "UDP" : "TCP");
 
 	return fd;
 }
