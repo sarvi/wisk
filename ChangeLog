@@ -1,6 +1,16 @@
 ChangeLog
 ==========
 
+version 1.1.8 (released 2017-10-13)
+  * Added support for openat()
+  * Added support for open64() and fopen64()
+  * Always enabled logging support
+  * Increased maximum for wrapped interfaces to 64
+  * Improved fd duplication code
+  * Fixed strict-aliasing issues
+  * Fixed some use after free issues
+  * Fixed issues on ppc64le
+
 version 1.1.7 (released 2016-05-20)
   * Added support for accept4()
   * Added support for OpenBSD
