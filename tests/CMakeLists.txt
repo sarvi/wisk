@@ -37,7 +37,8 @@ set(SWRAP_TESTS
     test_echo_udp_sendmsg_recvmsg
     test_swrap_unit
     test_max_sockets
-    test_close_failure)
+    test_close_failure
+    test_fork_thread_deadlock)
 
 if (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
     set(SWRAP_TESTS ${SWRAP_TESTS} test_sendmsg_recvmsg_fd)
@@ -60,3 +61,8 @@ foreach(_SWRAP_TEST ${SWRAP_TESTS})
                 ENVIRONMENT LD_PRELOAD=${SOCKET_WRAPPER_LOCATION})
     endif()
 endforeach()
+
+# test_fork_pthread
+add_library(thread_deadlock SHARED thread_deadlock.c)
+target_link_libraries(thread_deadlock ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(test_fork_thread_deadlock thread_deadlock)
