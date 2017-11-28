@@ -143,7 +143,7 @@ static void test_bind_ipv4(void **state)
 	 * Finally, success binding a new IPv4 address.
 	 */
 	addr_in = (struct torture_address) {
-		.sa_socklen = sizeof(struct sockaddr_un),
+		.sa_socklen = sizeof(struct sockaddr_in),
 		.sa.in = (struct sockaddr_in) {
 			.sin_family = AF_INET,
 		},
@@ -156,7 +156,7 @@ static void test_bind_ipv4(void **state)
 	assert_return_code(rc, errno);
 
 	addr_in = (struct torture_address) {
-		.sa_socklen = sizeof(struct sockaddr_un),
+		.sa_socklen = sizeof(struct sockaddr_in),
 		.sa.in = (struct sockaddr_in) {
 			.sin_family = AF_INET,
 			.sin_port = htons(torture_server_port()),
