@@ -694,14 +694,17 @@ static void *_swrap_bind_symbol(enum swrap_lib lib, const char *fn_name)
 	} \
 	SWRAP_UNLOCK(libc_symbol_binding)
 
-/*
- * IMPORTANT
+/****************************************************************************
+ *                               IMPORTANT
+ ****************************************************************************
  *
- * Functions especially from libc need to be loaded individually, you can't load
- * all at once or gdb will segfault at startup. The same applies to valgrind and
- * has probably something todo with with the linker.
- * So we need load each function at the point it is called the first time.
- */
+ * Functions especially from libc need to be loaded individually, you can't
+ * load all at once or gdb will segfault at startup. The same applies to
+ * valgrind and has probably something todo with with the linker.  So we need
+ * load each function at the point it is called the first time.
+ *
+ ****************************************************************************/
+
 #ifdef HAVE_ACCEPT4
 static int libc_accept4(int sockfd,
 			struct sockaddr *addr,
@@ -1075,6 +1078,59 @@ static ssize_t libc_writev(int fd, const struct iovec *iov, int iovcnt)
 	swrap_bind_symbol_libsocket(writev);
 
 	return swrap.libc.symbols._libc_writev.f(fd, iov, iovcnt);
+}
+
+/* DO NOT call this function during library initialization! */
+static void swrap_bind_symbol_all(void)
+{
+#ifdef HAVE_ACCEPT4
+	swrap_bind_symbol_libsocket(accept4);
+#else
+	swrap_bind_symbol_libsocket(accept);
+#endif
+	swrap_bind_symbol_libsocket(bind);
+	swrap_bind_symbol_libc(close);
+	swrap_bind_symbol_libsocket(connect);
+	swrap_bind_symbol_libc(dup);
+	swrap_bind_symbol_libc(dup2);
+	swrap_bind_symbol_libc(fcntl);
+	swrap_bind_symbol_libc(fopen);
+#ifdef HAVE_FOPEN64
+	swrap_bind_symbol_libc(fopen64);
+#endif
+#ifdef HAVE_EVENTFD
+	swrap_bind_symbol_libc(eventfd);
+#endif
+	swrap_bind_symbol_libsocket(getpeername);
+	swrap_bind_symbol_libsocket(getsockname);
+	swrap_bind_symbol_libsocket(getsockopt);
+	swrap_bind_symbol_libc(ioctl);
+	swrap_bind_symbol_libsocket(listen);
+	swrap_bind_symbol_libc(open);
+#ifdef HAVE_OPEN64
+	swrap_bind_symbol_libc(open64);
+#endif
+	swrap_bind_symbol_libc(openat);
+	swrap_bind_symbol_libsocket(pipe);
+	swrap_bind_symbol_libc(read);
+	swrap_bind_symbol_libsocket(readv);
+	swrap_bind_symbol_libsocket(recv);
+	swrap_bind_symbol_libsocket(recvfrom);
+	swrap_bind_symbol_libsocket(recvmsg);
+	swrap_bind_symbol_libsocket(send);
+	swrap_bind_symbol_libsocket(sendmsg);
+	swrap_bind_symbol_libsocket(sendto);
+	swrap_bind_symbol_libsocket(setsockopt);
+#ifdef HAVE_SIGNALFD
+	swrap_bind_symbol_libsocket(signalfd);
+#endif
+	swrap_bind_symbol_libsocket(socket);
+	swrap_bind_symbol_libsocket(socketpair);
+#ifdef HAVE_TIMERFD_CREATE
+	swrap_bind_symbol_libc(timerfd_create);
+#endif
+	swrap_bind_symbol_libc(write);
+	swrap_bind_symbol_libsocket(writev);
 }
 
 /*********************************************************
@@ -5835,6 +5891,15 @@ int pledge(const char *promises, const char *paths[])
 
 static void swrap_thread_prepare(void)
 {
+	/*
+	 * This function should only be called here!!
+	 *
+	 * We bind all symobls to avoid deadlocks of the fork is
+	 * interrupted by a signal handler using a symbol of this
+	 * library.
+	 */
+	swrap_bind_symbol_all();
+
 	SWRAP_LOCK_ALL;
 }
 
