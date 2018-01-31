@@ -42,7 +42,8 @@ set(SWRAP_TESTS
     test_thread_echo_tcp_connect
     test_thread_echo_tcp_write_read
     test_thread_echo_tcp_sendmsg_recvmsg
-    test_thread_echo_udp_send_recv)
+    test_thread_echo_udp_send_recv
+    test_tcp_socket_overwrite)
 
 if (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
     set(SWRAP_TESTS ${SWRAP_TESTS} test_sendmsg_recvmsg_fd)
