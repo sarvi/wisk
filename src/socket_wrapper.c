@@ -2015,8 +2015,6 @@ static void swrap_remove_stale(int fd)
 
 	SWRAP_DLIST_REMOVE(socket_fds, fi);
 
-	swrap_set_next_free(si, first_free);
-	first_free = si_index;
 	swrap_dec_refcount(si);
 
 	free(fi);
@@ -2028,6 +2026,9 @@ static void swrap_remove_stale(int fd)
 	if (si->un_addr.sun_path[0] != '\0') {
 		unlink(si->un_addr.sun_path);
 	}
+
+	swrap_set_next_free(si, first_free);
+	first_free = si_index;
 
 out:
 	SWRAP_UNLOCK_SI(si);
@@ -5887,9 +5888,6 @@ static int swrap_close(int fd)
 
 	ret = libc_close(fd);
 
-	swrap_set_next_free(si, first_free);
-	first_free = si_index;
-
 	swrap_dec_refcount(si);
 
 	free(fi);
@@ -5911,6 +5909,9 @@ static int swrap_close(int fd)
 	if (si->un_addr.sun_path[0] != '\0') {
 		unlink(si->un_addr.sun_path);
 	}
+
+	swrap_set_next_free(si, first_free);
+	first_free = si_index;
 
 out:
 	SWRAP_UNLOCK_SI(si);
