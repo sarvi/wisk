@@ -111,7 +111,7 @@ enum swrap_dbglvl_e {
 # ifdef HAVE_FALLTHROUGH_ATTRIBUTE
 #  define FALL_THROUGH __attribute__ ((fallthrough))
 # else /* HAVE_FALLTHROUGH_ATTRIBUTE */
-#  define FALL_THROUGH
+#  define FALL_THROUGH ((void)0)
 # endif /* HAVE_FALLTHROUGH_ATTRIBUTE */
 #endif /* FALL_THROUGH */
 
