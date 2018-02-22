@@ -42,7 +42,7 @@ if(CMAKE_COMPILER_IS_GNUCC AND NOT MINGW AND NOT OS2)
 "void __attribute__((visibility(\"default\"))) test() {}
 int main(void){ return 0; }
 " WITH_VISIBILITY_HIDDEN)
-        set(CMAKE_REQUIRED_FLAGS "")
+        unset(CMAKE_REQUIRED_FLAGS)
     endif (NOT GNUCC_VERSION EQUAL 34)
 endif(CMAKE_COMPILER_IS_GNUCC AND NOT MINGW AND NOT OS2)
 
@@ -93,7 +93,7 @@ set(SWRAP_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} CACHE INTERNAL "socket_
 check_struct_has_member("struct in_pktinfo" ipi_addr "sys/types.h;sys/socket.h;netinet/in.h" HAVE_STRUCT_IN_PKTINFO)
 set(CMAKE_REQUIRED_FLAGS -D_GNU_SOURCE)
 check_struct_has_member("struct in6_pktinfo" ipi6_addr "sys/types.h;sys/socket.h;netinet/in.h" HAVE_STRUCT_IN6_PKTINFO)
-set(CMAKE_REQUIRED_FLAGS)
+unset(CMAKE_REQUIRED_FLAGS)
 
 # STRUCT MEMBERS
 check_struct_has_member("struct sockaddr" sa_len "sys/types.h;sys/socket.h;netinet/in.h" HAVE_STRUCT_SOCKADDR_SA_LEN)
@@ -173,6 +173,11 @@ int main(void) {
     return 0;
 }" HAVE_SOCKADDR_STORAGE)
 
+###########################################################
+# For detecting attributes we need to treat warnings as
+# errors
+set(CMAKE_REQUIRED_FLAGS "-Werror")
+
 check_c_source_compiles("
 void test_constructor_attribute(void) __attribute__ ((constructor));
 
@@ -238,8 +243,6 @@ int main(void) {
     return 0;
 }" HAVE_FUNCTION_ATTRIBUTE_FORMAT)
 
-# If this produces a warning treat it as error!
-set(CMAKE_REQUIRED_FLAGS "-Werror")
 check_c_source_compiles("
 void test_address_sanitizer_attribute(void) __attribute__((no_sanitize_address));
 
@@ -251,7 +254,10 @@ void test_address_sanitizer_attribute(void)
 int main(void) {
     return 0;
 }" HAVE_ADDRESS_SANITIZER_ATTRIBUTE)
-set(CMAKE_REQUIRED_FLAGS)
+
+# Stop treating wanrings as errors
+unset(CMAKE_REQUIRED_FLAGS)
+###########################################################
 
 check_library_exists(dl dlopen "" HAVE_LIBDL)
 if (HAVE_LIBDL)
