@@ -1198,6 +1198,21 @@ static struct socket_info *swrap_get_socket_info(int si_index)
 	return (struct socket_info *)(&(sockets[si_index].info));
 }
 
+static int swrap_get_refcount(struct socket_info *si)
+{
+	return si->refcount;
+}
+
+static void swrap_inc_refcount(struct socket_info *si)
+{
+	si->refcount += 1;
+}
+
+static void swrap_dec_refcount(struct socket_info *si)
+{
+	si->refcount -= 1;
+}
+
 static const char *socket_wrapper_dir(void)
 {
 	const char *s = getenv("SOCKET_WRAPPER_DIR");
@@ -1864,9 +1879,9 @@ static void swrap_remove_stale(int fd)
 	free(fi);
 
 	si = swrap_get_socket_info(si_index);
-	si->refcount--;
+	swrap_dec_refcount(si);
 
-	if (si->refcount > 0) {
+	if (swrap_get_refcount(si) > 0) {
 		return;
 	}
 
@@ -2923,7 +2938,7 @@ static int swrap_socket(int family, int type, int protocol)
 	 * note: as side-effect, socket_wrapper_first_free_index
 	 * zeroed the si, so we are starting from refcount 0
 	 */
-	si->refcount++;
+	swrap_inc_refcount(si);
 	first_free = si->next_free;
 	si->next_free = 0;
 
@@ -3153,7 +3168,7 @@ static int swrap_accept(int s,
 	};
 	memcpy(&child_si->myname.sa.ss, &in_my_addr.sa.ss, in_my_addr.sa_socklen);
 
-	si->refcount++;
+	swrap_inc_refcount(child_si);
 	first_free = child_si->next_free;
 	child_si->next_free = 0;
 
@@ -5666,9 +5681,9 @@ static int swrap_close(int fd)
 	ret = libc_close(fd);
 
 	si = swrap_get_socket_info(si_index);
-	si->refcount--;
+	swrap_dec_refcount(si);
 
-	if (si->refcount > 0) {
+	if (swrap_get_refcount(si) > 0) {
 		/* there are still references left */
 		return ret;
 	}
@@ -5727,7 +5742,7 @@ static int swrap_dup(int fd)
 		return -1;
 	}
 
-	si->refcount++;
+	swrap_inc_refcount(si);
 	fi->si_index = src_fi->si_index;
 
 	/* Make sure we don't have an entry for the fd */
@@ -5788,7 +5803,7 @@ static int swrap_dup2(int fd, int newfd)
 		return -1;
 	}
 
-	si->refcount++;
+	swrap_inc_refcount(si);
 	fi->si_index = src_fi->si_index;
 
 	/* Make sure we don't have an entry for the fd */
@@ -5836,7 +5851,7 @@ static int swrap_vfcntl(int fd, int cmd, va_list va)
 			return -1;
 		}
 
-		si->refcount++;
+		swrap_inc_refcount(si);
 		fi->si_index = src_fi->si_index;
 
 		/* Make sure we don't have an entry for the fd */
