@@ -185,7 +185,6 @@ enum swrap_dbglvl_e {
 # define SWRAP_UNLOCK_ALL \
 	SWRAP_UNLOCK(libc_symbol_binding); \
 
-
 #define SWRAP_DLIST_ADD(list,item) do { \
 	if (!(list)) { \
 		(item)->prev	= NULL; \
@@ -1194,6 +1193,11 @@ static size_t socket_length(int family)
 	return 0;
 }
 
+static struct socket_info *swrap_get_socket_info(int si_index)
+{
+	return (struct socket_info *)(&(sockets[si_index].info));
+}
+
 static const char *socket_wrapper_dir(void)
 {
 	const char *s = getenv("SOCKET_WRAPPER_DIR");
@@ -1748,7 +1752,7 @@ static struct socket_info *find_socket_info(int fd)
 		return NULL;
 	}
 
-	return &sockets[idx];
+	return swrap_get_socket_info(idx);
 }
 
 #if 0 /* FIXME */
@@ -1777,7 +1781,7 @@ static bool check_addr_port_in_use(const struct sockaddr *sa, socklen_t len)
 	}
 
 	for (f = socket_fds; f; f = f->next) {
-		struct socket_info *s = &sockets[f->si_index];
+		struct socket_info *s = swrap_get_socket_info(f->si_index);
 
 		if (s == last_s) {
 			continue;
@@ -1859,7 +1863,7 @@ static void swrap_remove_stale(int fd)
 	SWRAP_DLIST_REMOVE(socket_fds, fi);
 	free(fi);
 
-	si = &sockets[si_index];
+	si = swrap_get_socket_info(si_index);
 	si->refcount--;
 
 	if (si->refcount > 0) {
@@ -2872,7 +2876,7 @@ static int swrap_socket(int family, int type, int protocol)
 		return -1;
 	}
 
-	si = &sockets[idx];
+	si = swrap_get_socket_info(idx);
 
 	si->family = family;
 
@@ -2915,7 +2919,11 @@ static int swrap_socket(int family, int type, int protocol)
 		return -1;
 	}
 
-	si->refcount = 1;
+	/*
+	 * note: as side-effect, socket_wrapper_first_free_index
+	 * zeroed the si, so we are starting from refcount 0
+	 */
+	si->refcount++;
 	first_free = si->next_free;
 	si->next_free = 0;
 
@@ -3084,7 +3092,7 @@ static int swrap_accept(int s,
 		return -1;
 	}
 
-	child_si = &sockets[idx];
+	child_si = swrap_get_socket_info(idx);
 
 	child_fi = (struct socket_info_fd *)calloc(1, sizeof(struct socket_info_fd));
 	if (child_fi == NULL) {
@@ -3145,7 +3153,7 @@ static int swrap_accept(int s,
 	};
 	memcpy(&child_si->myname.sa.ss, &in_my_addr.sa.ss, in_my_addr.sa_socklen);
 
-	child_si->refcount = 1;
+	si->refcount++;
 	first_free = child_si->next_free;
 	child_si->next_free = 0;
 
@@ -5657,7 +5665,7 @@ static int swrap_close(int fd)
 
 	ret = libc_close(fd);
 
-	si = &sockets[si_index];
+	si = swrap_get_socket_info(si_index);
 	si->refcount--;
 
 	if (si->refcount > 0) {
@@ -5703,7 +5711,7 @@ static int swrap_dup(int fd)
 		return libc_dup(fd);
 	}
 
-	si = &sockets[src_fi->si_index];
+	si = swrap_get_socket_info(src_fi->si_index);
 
 	fi = (struct socket_info_fd *)calloc(1, sizeof(struct socket_info_fd));
 	if (fi == NULL) {
@@ -5748,7 +5756,7 @@ static int swrap_dup2(int fd, int newfd)
 		return libc_dup2(fd, newfd);
 	}
 
-	si = &sockets[src_fi->si_index];
+	si = swrap_get_socket_info(src_fi->si_index);
 
 	if (fd == newfd) {
 		/*
@@ -5810,7 +5818,7 @@ static int swrap_vfcntl(int fd, int cmd, va_list va)
 		return libc_vfcntl(fd, cmd, va);
 	}
 
-	si = &sockets[src_fi->si_index];
+	si = swrap_get_socket_info(src_fi->si_index);
 
 	switch (cmd) {
 	case F_DUPFD:
