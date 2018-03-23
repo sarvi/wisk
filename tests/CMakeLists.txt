@@ -24,7 +24,6 @@ set(SWRAP_TESTS
     test_tcp_listen
     test_tcp_dup2
     test_fcntl
-    test_echo_tcp_socket
     test_echo_tcp_connect
     test_echo_tcp_bind
     test_echo_tcp_socket_options

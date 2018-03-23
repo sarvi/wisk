@@ -52,6 +52,7 @@ static void test_listen_unbound_ipv4(void **state)
 
 	rc = getsockname(s1, &addr.sa.s, &addr.sa_socklen);
 	assert_return_code(rc, errno);
+	assert_int_equal(addr.sa.in.sin_family, AF_INET);
 	assert_int_equal(addr.sa_socklen, sizeof(struct sockaddr_in));
 	assert_in_range(ntohs(addr.sa.in.sin_port), 1024, 65535);
 
@@ -85,6 +86,7 @@ static void test_listen_unbound_ipv6(void **state)
 
 	rc = getsockname(s1, &addr.sa.s, &addr.sa_socklen);
 	assert_return_code(rc, errno);
+	assert_int_equal(addr.sa.in6.sin6_family, AF_INET6);
 	assert_int_equal(addr.sa_socklen, sizeof(struct sockaddr_in6));
 	assert_in_range(ntohs(addr.sa.in6.sin6_port), 1024, 65535);
 
