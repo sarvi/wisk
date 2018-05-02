@@ -188,7 +188,7 @@ static void torture_setup_echo_srv_ip(void **state,
 		}
 
 		rc = stat(s->srv_pidfile, &sb);
-		usleep(2000);
+		usleep(5000);
 	} while (rc != 0);
 	assert_int_equal(rc, 0);
 
@@ -288,7 +288,7 @@ void torture_teardown_echo_srv(void **state)
 		/* Make sure the daemon goes away! */
 		kill(pid, SIGTERM);
 
-		usleep(200);
+		usleep(5000);
 
 		rc = kill(pid, 0);
 		if (rc != 0) {
