@@ -19,6 +19,13 @@ target_link_libraries(${TORTURE_LIBRARY}
     ${SWRAP_REQUIRED_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT})
 
+set(SWRAP_THREADED_TESTS
+    test_thread_sockets
+    test_thread_echo_tcp_connect
+    test_thread_echo_tcp_write_read
+    test_thread_echo_tcp_sendmsg_recvmsg
+    test_thread_echo_udp_send_recv)
+
 set(SWRAP_TESTS
     test_ioctl
     test_tcp_listen
@@ -38,12 +45,8 @@ set(SWRAP_TESTS
     test_max_sockets
     test_close_failure
     test_fork_thread_deadlock
-    test_thread_sockets
-    test_thread_echo_tcp_connect
-    test_thread_echo_tcp_write_read
-    test_thread_echo_tcp_sendmsg_recvmsg
-    test_thread_echo_udp_send_recv
-    test_tcp_socket_overwrite)
+    test_tcp_socket_overwrite
+    ${SWRAP_THREADED_TESTS})
 
 if (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
     set(SWRAP_TESTS ${SWRAP_TESTS} test_sendmsg_recvmsg_fd)
@@ -66,6 +69,32 @@ foreach(_SWRAP_TEST ${SWRAP_TESTS})
                 ENVIRONMENT LD_PRELOAD=${SOCKET_WRAPPER_LOCATION})
     endif()
 endforeach()
+
+if (HELGRIND_TESTING)
+    find_program(VALGRIND_EXECUTABLE valgrind)
+    if (VALGRIND_EXECUTABLE)
+        set(VALGRIND_HELGRIND_OPTIONS --trace-children=yes --tool=helgrind --xml=yes --read-var-info=yes)
+
+        foreach(_TEST ${SWRAP_THREADED_TESTS})
+            set(_HELGRIND_TEST "helgrind_${_TEST}")
+
+            add_test(NAME ${_HELGRIND_TEST} COMMAND ${VALGRIND_EXECUTABLE} ${VALGRIND_HELGRIND_OPTIONS} --xml-file=${CMAKE_CURRENT_BINARY_DIR}/helgrind_${_TEST}.xml ${CMAKE_CURRENT_BINARY_DIR}/${_TEST})
+            if (OSX)
+                set_property(
+                    TEST
+                        ${_HELGRIND_TEST}
+                    PROPERTY
+                        ENVIRONMENT DYLD_FORCE_FLAT_NAMESPACE=1;DYLD_INSERT_LIBRARIES=${SOCKET_WRAPPER_LOCATION})
+            else ()
+                set_property(
+                    TEST
+                        ${_HELGRIND_TEST}
+                    PROPERTY
+                        ENVIRONMENT LD_PRELOAD=${SOCKET_WRAPPER_LOCATION})
+            endif()
+        endforeach()
+    endif()
+endif()
 
 # test_fork_pthread
 add_library(thread_deadlock SHARED thread_deadlock.c)
