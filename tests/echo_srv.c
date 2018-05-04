@@ -534,9 +534,8 @@ static void echo_tcp(int sock)
             }
             close(s);
             exit(0);
-        } else {
-            close(s);
         }
+        close(s);
     }
 
 done:
