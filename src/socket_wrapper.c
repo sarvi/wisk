@@ -4656,13 +4656,14 @@ static ssize_t swrap_sendmsg_before(int fd,
 		if (si->bound == 0) {
 			ret = swrap_auto_bind(fd, si, si->family);
 			if (ret == -1) {
+				SWRAP_UNLOCK_SI(si);
 				if (errno == ENOTSOCK) {
 					swrap_remove_stale(fd);
 					ret = -ENOTSOCK;
 				} else {
 					SWRAP_LOG(SWRAP_LOG_ERROR, "swrap_sendmsg_before failed");
 				}
-				goto out;
+				return ret;
 			}
 		}
 
@@ -4866,6 +4867,7 @@ static int swrap_recvmsg_before(int fd,
 		if (si->bound == 0) {
 			ret = swrap_auto_bind(fd, si, si->family);
 			if (ret == -1) {
+				SWRAP_UNLOCK_SI(si);
 				/*
 				 * When attempting to read or write to a
 				 * descriptor, if an underlying autobind fails
@@ -4879,7 +4881,7 @@ static int swrap_recvmsg_before(int fd,
 					SWRAP_LOG(SWRAP_LOG_ERROR,
 						  "swrap_recvmsg_before failed");
 				}
-				goto out;
+				return ret;
 			}
 		}
 		break;
