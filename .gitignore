@@ -4,6 +4,6 @@
 *.swp
 *~
 build
-obj
+obj*/
 cscope.*
 tags
