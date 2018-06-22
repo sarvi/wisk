@@ -1,8 +1,11 @@
 /*
- * Copyright (c) 2005-2008 Jelmer Vernooij <jelmer@samba.org>
- * Copyright (C) 2006-2014 Stefan Metzmacher <metze@samba.org>
- * Copyright (C) 2013-2014 Andreas Schneider <asn@samba.org>
+ * BSD 3-Clause License
  *
+ * Copyright (c) 2005-2008, Jelmer Vernooij <jelmer@samba.org>
+ * Copyright (c) 2006-2018, Stefan Metzmacher <metze@samba.org>
+ * Copyright (c) 2013-2018, Andreas Schneider <asn@samba.org>
+ * Copyright (c) 2014-2017, Michael Adam <obnox@samba.org>
+ * Copyright (c) 2016-2018, Anoop C S <anoopcs@redhat.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,7 +34,6 @@
  * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
- *
  */
 
 /*
