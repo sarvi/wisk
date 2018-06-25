@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: socket_wrapper
-.\"    Author: [FIXME: author] [see http://docbook.sf.net/el/author]
-.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 2015-08-11
+.\"    Author: Samba Team
+.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
+.\"      Date: 2018-06-26
 .\"    Manual: \ \&
 .\"    Source: \ \&
 .\"  Language: English
 .\"
-.TH "SOCKET_WRAPPER" "1" "2015\-08\-11" "\ \&" "\ \&"
+.TH "SOCKET_WRAPPER" "1" "2018\-06\-26" "\ \&" "\ \&"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -91,6 +91,13 @@ With this variable you can change the MTU size\&. However we do not recomment to
 .RE
 .sp
 The minimum value you can set is 512 and the maximum 32768\&.
+.PP
+\fBSOCKET_WRAPPER_MAX_SOCKETS\fR
+.RS 4
+This variable can be used to set the maximum number of sockets to be used by an application\&.
+.RE
+.sp
+The default value is set to 65535 and the maximum 256000\&.
 .PP
 \fBSOCKET_WRAPPER_DEBUGLEVEL\fR
 .RS 4
@@ -202,3 +209,9 @@ $ LD_PRELOAD=libsocket_wrapper\&.so \e
 .if n \{\
 .RE
 .\}
+.SH "AUTHOR"
+.PP
+\fBSamba Team\fR
+.RS 4
+Author.
+.RE

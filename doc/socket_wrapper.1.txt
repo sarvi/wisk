@@ -1,6 +1,7 @@
 socket_wrapper(1)
 =================
-:revdate: 2015-08-11
+:revdate: 2018-06-26
+:author: Samba Team
 
 NAME
 ----
@@ -58,6 +59,13 @@ With this variable you can change the MTU size. However we do not recomment to
 do that as the default size of 1500 byte is best for formatting PCAP files.
 
 The minimum value you can set is 512 and the maximum 32768.
+
+*SOCKET_WRAPPER_MAX_SOCKETS*::
+
+This variable can be used to set the maximum number of sockets to be used by
+an application.
+
+The default value is set to 65535 and the maximum 256000.
 
 *SOCKET_WRAPPER_DEBUGLEVEL*::
 
