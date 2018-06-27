@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -535,6 +536,7 @@ static void echo_tcp(int sock)
             close(s);
             exit(0);
         }
+        waitpid(-1, NULL, 0);
         close(s);
     }
 
