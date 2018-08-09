@@ -1,16 +1,11 @@
-project(socket_wrapper C)
-
 # Required cmake version
 cmake_minimum_required(VERSION 2.8.5)
+cmake_policy(SET CMP0048 NEW)
+
+project(socket_wrapper VERSION 1.1.9 LANGUAGES C)
 
 # global needed variables
 set(APPLICATION_NAME ${PROJECT_NAME})
-
-set(APPLICATION_VERSION_MAJOR "1")
-set(APPLICATION_VERSION_MINOR "1")
-set(APPLICATION_VERSION_PATCH "9")
-
-set(APPLICATION_VERSION "${APPLICATION_VERSION_MAJOR}.${APPLICATION_VERSION_MINOR}.${APPLICATION_VERSION_PATCH}")
 
 # SOVERSION scheme: CURRENT.AGE.REVISION
 #   If there was an incompatible interface change:
