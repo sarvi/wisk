@@ -45,7 +45,7 @@
 
 static void test_swrap_signal_handler(int signum)
 {
-	fprintf(stderr, "PID: %d, SIGNUM: %d\n", getpid(), signum);
+	fprintf(stderr, "PID: %u, SIGNUM: %d\n", (unsigned int)getpid(), signum);
 	write(1, "DEADLOCK?\n", 10);
 }
 
