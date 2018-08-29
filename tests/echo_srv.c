@@ -548,8 +548,8 @@ done:
 
 static ssize_t echo_udp_recv_from_to(int sock,
 				     void *buf, size_t buflen, int flags,
-				     struct sockaddr *from, socklen_t *fromlen,
-				     struct sockaddr *to, socklen_t *tolen)
+				     struct torture_address *from,
+				     struct torture_address *to)
 {
 	struct msghdr rmsg;
 	struct iovec riov;
@@ -558,9 +558,6 @@ static ssize_t echo_udp_recv_from_to(int sock,
 #if defined(HAVE_STRUCT_MSGHDR_MSG_CONTROL) && defined(HAVE_UNION_PKTINFO)
 	size_t cmlen = CMSG_LEN(sizeof(union pktinfo));
 	char cmsg[cmlen];
-#else
-	(void)to; /* unused */
-	(void)tolen; /* unused */
 #endif /* HAVE_STRUCT_MSGHDR_MSG_CONTROL */
 
 	riov.iov_base = buf;
@@ -568,8 +565,8 @@ static ssize_t echo_udp_recv_from_to(int sock,
 
 	ZERO_STRUCT(rmsg);
 
-	rmsg.msg_name = from;
-	rmsg.msg_namelen = *fromlen;
+	rmsg.msg_name = &from->sa.s;
+	rmsg.msg_namelen = from->sa_socklen;
 
 	rmsg.msg_iov = &riov;
 	rmsg.msg_iovlen = 1;
@@ -585,7 +582,7 @@ static ssize_t echo_udp_recv_from_to(int sock,
 	if (ret < 0) {
 		return ret;
 	}
-	*fromlen = rmsg.msg_namelen;
+	from->sa_socklen = rmsg.msg_namelen;
 
 #if defined(HAVE_STRUCT_MSGHDR_MSG_CONTROL) && defined(HAVE_UNION_PKTINFO)
 	if (rmsg.msg_controllen > 0) {
@@ -599,17 +596,16 @@ static ssize_t echo_udp_recv_from_to(int sock,
 			if (cmsgptr->cmsg_level == IPPROTO_IP &&
 					cmsgptr->cmsg_type == IP_PKTINFO) {
 				char ip[INET_ADDRSTRLEN] = { 0 };
-				struct sockaddr_in *sinp = (struct sockaddr_in *)to;
 				struct in_pktinfo *pkt;
 				void *cmsg_cast_ptr = CMSG_DATA(cmsgptr);
 
 				pkt = (struct in_pktinfo *)cmsg_cast_ptr;
 
-				sinp->sin_family = AF_INET;
-				sinp->sin_addr = pkt->ipi_addr;
-				*tolen = sizeof(struct sockaddr_in);
+				to->sa.in.sin_family = AF_INET;
+				to->sa.in.sin_addr = pkt->ipi_addr;
+				to->sa_socklen = sizeof(struct sockaddr_in);
 
-				p = inet_ntop(AF_INET, &sinp->sin_addr, ip, sizeof(ip));
+				p = inet_ntop(AF_INET, &to->sa.in.sin_addr, ip, sizeof(ip));
 				if (p == 0) {
 					fprintf(stderr, "Failed to convert IP address");
 					abort();
@@ -625,18 +621,16 @@ static ssize_t echo_udp_recv_from_to(int sock,
 			if (cmsgptr->cmsg_level == IPPROTO_IP &&
 			    cmsgptr->cmsg_type == IP_RECVDSTADDR) {
 				char ip[INET_ADDRSTRLEN] = { 0 };
-				struct sockaddr_in *sinp =
-					(struct sockaddr_in *)(void *)to;
 				struct in_addr *addr;
 				void *cmsg_cast_ptr = CMSG_DATA(cmsgptr);
 
 				addr = (struct in_addr *)cmsg_cast_ptr;
 
-				sinp->sin_family = AF_INET;
-				sinp->sin_addr = *addr;
-				*tolen = sizeof(struct sockaddr_in);
+				to->sa.in.sin_family = AF_INET;
+				to->sa.in.sin_addr = *addr;
+				to->sa_socklen = sizeof(struct sockaddr_in);
 
-				p = inet_ntop(AF_INET, &sinp->sin_addr, ip, sizeof(ip));
+				p = inet_ntop(AF_INET, &to->sa.in.sin_addr, ip, sizeof(ip));
 				if (p == 0) {
 					fprintf(stderr, "Failed to convert IP address");
 					abort();
@@ -653,16 +647,14 @@ static ssize_t echo_udp_recv_from_to(int sock,
 					cmsgptr->cmsg_type == IPV6_PKTINFO) {
 				char ip[INET6_ADDRSTRLEN] = { 0 };
 				struct in6_pktinfo *pkt6;
-				struct sockaddr_in6 *sin6p =
-					(struct sockaddr_in6 *)(void *)to;
 				void *cmsg_cast_ptr = CMSG_DATA(cmsgptr);
 
 				pkt6 = (struct in6_pktinfo *)cmsg_cast_ptr;
 
-				sin6p->sin6_family = AF_INET6;
-				sin6p->sin6_addr = pkt6->ipi6_addr;
+				to->sa.in6.sin6_family = AF_INET6;
+				to->sa.in6.sin6_addr = pkt6->ipi6_addr;
 
-				p = inet_ntop(AF_INET6, &sin6p->sin6_addr, ip, sizeof(ip));
+				p = inet_ntop(AF_INET6, &to->sa.in6.sin6_addr, ip, sizeof(ip));
 				if (p == 0) {
 					fprintf(stderr, "Failed to convert IP address");
 					abort();
@@ -802,10 +794,8 @@ static void echo_udp(int sock)
                                      buf,
                                      BUFSIZE,
                                      0,
-                                     &saddr.sa.s,
-                                     &saddr.sa_socklen,
-                                     &daddr.sa.s,
-                                     &daddr.sa_socklen);
+                                     &saddr,
+                                     &daddr);
         if (bret == -1) {
             perror("recvfrom");
             continue;
