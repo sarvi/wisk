@@ -74,20 +74,20 @@ if (UNIX)
         # libsocket (Solaris)
         check_library_exists(socket getaddrinfo "" HAVE_LIBSOCKET)
         if (HAVE_LIBSOCKET)
-          set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} socket)
+          set(_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} socket)
         endif (HAVE_LIBSOCKET)
 
         # libnsl/inet_pton (Solaris)
         check_library_exists(nsl inet_pton "" HAVE_LIBNSL)
         if (HAVE_LIBNSL)
-            set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} nsl)
+            set(_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} nsl)
         endif (HAVE_LIBNSL)
     endif (NOT LINUX)
 
     check_function_exists(getaddrinfo HAVE_GETADDRINFO)
 endif (UNIX)
 
-set(SWRAP_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} CACHE INTERNAL "socket_wrapper required system libraries")
+set(SWRAP_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} CACHE INTERNAL "socket_wrapper required system libraries")
 
 # STRUCTS
 check_struct_has_member("struct in_pktinfo" ipi_addr "sys/types.h;sys/socket.h;netinet/in.h" HAVE_STRUCT_IN_PKTINFO)
@@ -253,7 +253,7 @@ unset(CMAKE_REQUIRED_FLAGS)
 check_library_exists(dl dlopen "" HAVE_LIBDL)
 if (HAVE_LIBDL)
     find_library(DLFCN_LIBRARY dl)
-    set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${DLFCN_LIBRARY})
+    set(_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} ${DLFCN_LIBRARY})
 endif (HAVE_LIBDL)
 
 if (OSX)
@@ -267,4 +267,4 @@ endif (NOT WIN32)
 
 check_type_size(pid_t SIZEOF_PID_T)
 
-set(SWRAP_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} CACHE INTERNAL "swrap required system libraries")
+set(SWRAP_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} CACHE INTERNAL "swrap required system libraries")
