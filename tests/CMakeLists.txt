@@ -60,6 +60,32 @@ if (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
     set(SWRAP_TESTS ${SWRAP_TESTS} test_sendmsg_recvmsg_fd)
 endif (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
 
+if (CMAKE_BUILD_TYPE)
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
+    if (CMAKE_BUILD_TYPE_LOWER STREQUAL "addresssanitizer")
+        find_library(ASAN_LIBRARY
+                     NAMES asan)
+        if (NOT ASAN_LIBRARY)
+            foreach(version RANGE 10 1)
+                if (NOT ASAN_LIBRARY)
+                    find_library(ASAN_LIBRARY libasan.so.${version})
+                endif()
+            endforeach()
+        endif()
+    endif()
+endif()
+
+if (ASAN_LIBRARY)
+    list(APPEND PRELOAD_LIBRARIES ${ASAN_LIBRARY})
+endif()
+
+list(APPEND PRELOAD_LIBRARIES ${SOCKET_WRAPPER_LOCATION})
+
+string(REPLACE ";" ":" TORTURE_ENVIRONMENT "${PRELOAD_LIBRARIES}")
+string(PREPEND TORTURE_ENVIRONMENT "LD_PRELOAD=")
+
+message(STATUS "TORTURE_ENVIRONMENT=${TORTURE_ENVIRONMENT}")
+
 foreach(_SWRAP_TEST ${SWRAP_TESTS})
     add_cmocka_test(${_SWRAP_TEST} ${_SWRAP_TEST}.c ${TORTURE_LIBRARY})
     target_compile_options(${_SWRAP_TEST}
@@ -78,7 +104,7 @@ foreach(_SWRAP_TEST ${SWRAP_TESTS})
             TEST
                 ${_SWRAP_TEST}
             PROPERTY
-                ENVIRONMENT LD_PRELOAD=${SOCKET_WRAPPER_LOCATION})
+                ENVIRONMENT ${TORTURE_ENVIRONMENT})
     endif()
 endforeach()
 
