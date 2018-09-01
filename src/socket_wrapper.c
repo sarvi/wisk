@@ -558,7 +558,15 @@ static void *swrap_load_lib_handle(enum swrap_lib lib)
 	int i;
 
 #ifdef RTLD_DEEPBIND
-	flags |= RTLD_DEEPBIND;
+	const char *env = getenv("LD_PRELOAD");
+
+	/* Don't do a deepbind if we run with libasan */
+	if (env != NULL && strlen(env) < 1024) {
+		const char *p = strstr(env, "libasan.so");
+		if (p == NULL) {
+			flags |= RTLD_DEEPBIND;
+		}
+	}
 #endif
 
 	switch (lib) {
