@@ -4,6 +4,10 @@ include_directories(${CMAKE_BINARY_DIR})
 
 add_library(socket_wrapper SHARED socket_wrapper.c)
 
+target_compile_options(socket_wrapper
+                       PRIVATE
+                          ${DEFAULT_C_COMPILE_FLAGS}
+                          -D_GNU_SOURCE)
 target_link_libraries(socket_wrapper ${SWRAP_REQUIRED_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT})
 
 install(

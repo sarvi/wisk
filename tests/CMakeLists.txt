@@ -11,9 +11,17 @@ set(TORTURE_LIBRARY torture)
 
 # RFC862 echo server
 add_executable(echo_srv echo_srv.c)
+target_compile_options(echo_srv
+                       PRIVATE
+                           ${DEFAULT_C_COMPILE_FLAGS}
+                           -D_GNU_SOURCE)
 target_link_libraries(echo_srv ${SWRAP_REQUIRED_LIBRARIES})
 
 add_library(${TORTURE_LIBRARY} STATIC torture.c)
+target_compile_options(${TORTURE_LIBRARY}
+                       PRIVATE
+                           ${DEFAULT_C_COMPILE_FLAGS}
+                           -D_GNU_SOURCE)
 target_link_libraries(${TORTURE_LIBRARY}
     ${CMOCKA_LIBRARY}
     ${SWRAP_REQUIRED_LIBRARIES}
@@ -54,6 +62,10 @@ endif (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
 
 foreach(_SWRAP_TEST ${SWRAP_TESTS})
     add_cmocka_test(${_SWRAP_TEST} ${_SWRAP_TEST}.c ${TORTURE_LIBRARY})
+    target_compile_options(${_SWRAP_TEST}
+                           PRIVATE
+                               ${DEFAULT_C_COMPILE_FLAGS}
+                               -D_GNU_SOURCE)
 
     if (OSX)
         set_property(
@@ -99,4 +111,6 @@ endif()
 # test_fork_pthread
 add_library(thread_deadlock SHARED thread_deadlock.c)
 target_link_libraries(thread_deadlock ${CMAKE_THREAD_LIBS_INIT})
+target_compile_options(thread_deadlock PRIVATE ${DEFAULT_C_COMPILE_FLAGS})
 target_link_libraries(test_fork_thread_deadlock thread_deadlock)
+target_compile_options(test_fork_thread_deadlock PRIVATE ${DEFAULT_C_COMPILE_FLAGS})

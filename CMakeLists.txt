@@ -25,10 +25,10 @@ set(CMAKE_MODULE_PATH
 # add definitions
 include(DefineCMakeDefaults)
 include(DefinePlatformDefaults)
-include(DefineCompilerFlags)
 include(DefineInstallationPaths)
 include(DefineOptions.cmake)
 include(CPackConfig.cmake)
+include(CompilerChecks.cmake)
 
 # disallow in-source build
 include(MacroEnsureOutOfSourceBuild)
