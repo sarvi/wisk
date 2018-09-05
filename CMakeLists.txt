@@ -2,6 +2,15 @@
 cmake_minimum_required(VERSION 2.8.5)
 cmake_policy(SET CMP0048 NEW)
 
+# Specify search path for CMake modules to be loaded by include() 
+# and find_package()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
+
+# Add defaults for cmake
+# Those need to be set before the project() call.
+include(DefineCMakeDefaults)
+include(DefineCompilerFlags)
+
 project(socket_wrapper VERSION 1.1.9 LANGUAGES C)
 
 # global needed variables
@@ -17,13 +26,7 @@ set(APPLICATION_NAME ${PROJECT_NAME})
 set(LIBRARY_VERSION "0.1.9")
 set(LIBRARY_SOVERSION "0")
 
-# where to look first for cmake modules, before ${CMAKE_ROOT}/Modules/ is checked
-set(CMAKE_MODULE_PATH
-  ${CMAKE_SOURCE_DIR}/cmake/Modules
-)
-
 # add definitions
-include(DefineCMakeDefaults)
 include(DefinePlatformDefaults)
 include(DefineInstallationPaths)
 include(DefineOptions.cmake)
