@@ -73,12 +73,12 @@ endforeach()
 if (HELGRIND_TESTING)
     find_program(VALGRIND_EXECUTABLE valgrind)
     if (VALGRIND_EXECUTABLE)
-        set(VALGRIND_HELGRIND_OPTIONS --trace-children=yes --tool=helgrind --xml=yes --read-var-info=yes)
+        set(VALGRIND_HELGRIND_OPTIONS -v -trace-children=yes --tool=helgrind --read-var-info=yes)
 
         foreach(_TEST ${SWRAP_THREADED_TESTS})
             set(_HELGRIND_TEST "helgrind_${_TEST}")
 
-            add_test(NAME ${_HELGRIND_TEST} COMMAND ${VALGRIND_EXECUTABLE} ${VALGRIND_HELGRIND_OPTIONS} --xml-file=${CMAKE_CURRENT_BINARY_DIR}/helgrind_${_TEST}.xml ${CMAKE_CURRENT_BINARY_DIR}/${_TEST})
+            add_test(NAME ${_HELGRIND_TEST} COMMAND ${VALGRIND_EXECUTABLE} ${VALGRIND_HELGRIND_OPTIONS} ${CMAKE_CURRENT_BINARY_DIR}/${_TEST})
             if (OSX)
                 set_property(
                     TEST
