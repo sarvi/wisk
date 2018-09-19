@@ -310,6 +310,12 @@ static pthread_mutex_t sockets_mutex;
 /* Mutex to synchronize access to first free index in socket_info array */
 static pthread_mutex_t first_free_mutex;
 
+/* Mutex to synchronize access to packet capture dump file */
+static pthread_mutex_t pcap_dump_mutex;
+
+/* Mutex for synchronizing mtu value fetch*/
+static pthread_mutex_t mtu_update_mutex;
+
 /* Function prototypes */
 
 bool socket_wrapper_enabled(void);
@@ -1250,8 +1256,10 @@ static unsigned int socket_wrapper_mtu(void)
 	const char *s;
 	char *endp;
 
+	swrap_mutex_lock(&mtu_update_mutex);
+
 	if (max_mtu != 0) {
-		return max_mtu;
+		goto done;
 	}
 
 	max_mtu = SOCKET_WRAPPER_MTU_DEFAULT;
@@ -1272,6 +1280,7 @@ static unsigned int socket_wrapper_mtu(void)
 	max_mtu = tmp;
 
 done:
+	swrap_mutex_unlock(&mtu_update_mutex);
 	return max_mtu;
 }
 
@@ -1400,6 +1409,20 @@ static void socket_wrapper_init_sockets(void)
 	swrap_set_next_free(&sockets[max_sockets-1].info, -1);
 
 	ret = socket_wrapper_init_mutex(&autobind_start_mutex);
+	if (ret != 0) {
+		SWRAP_LOG(SWRAP_LOG_ERROR,
+			  "Failed to initialize pthread mutex");
+		goto done;
+	}
+
+	ret = socket_wrapper_init_mutex(&pcap_dump_mutex);
+	if (ret != 0) {
+		SWRAP_LOG(SWRAP_LOG_ERROR,
+			  "Failed to initialize pthread mutex");
+		goto done;
+	}
+
+	ret = socket_wrapper_init_mutex(&mtu_update_mutex);
 	if (ret != 0) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
 			  "Failed to initialize pthread mutex");
@@ -2896,9 +2919,11 @@ static void swrap_pcap_dump_packet(struct socket_info *si,
 	size_t packet_len = 0;
 	int fd;
 
+	swrap_mutex_lock(&pcap_dump_mutex);
+
 	file_name = swrap_pcap_init_file();
 	if (!file_name) {
-		return;
+		goto done;
 	}
 
 	packet = swrap_pcap_marshall_packet(si,
@@ -2908,18 +2933,21 @@ static void swrap_pcap_dump_packet(struct socket_info *si,
 					    len,
 					    &packet_len);
 	if (packet == NULL) {
-		return;
+		goto done;
 	}
 
 	fd = swrap_pcap_get_fd(file_name);
 	if (fd != -1) {
 		if (write(fd, packet, packet_len) != (ssize_t)packet_len) {
 			free(packet);
-			return;
+			goto done;
 		}
 	}
 
 	free(packet);
+
+done:
+	swrap_mutex_unlock(&pcap_dump_mutex);
 }
 
 /****************************************************************************
