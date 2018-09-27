@@ -183,12 +183,12 @@ static void torture_setup_echo_srv_ip(void **state,
 		struct stat sb;
 
 		count++;
-		if (count > 100) {
+		if (count > 20) {
 			break;
 		}
 
 		rc = stat(s->srv_pidfile, &sb);
-		usleep(5000);
+		usleep(50000L); /* 0.05s * 20 */
 	} while (rc != 0);
 	assert_int_equal(rc, 0);
 
