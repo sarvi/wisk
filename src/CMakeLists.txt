@@ -1,9 +1,9 @@
 project(libsocket_wrapper C)
 
-include_directories(${CMAKE_BINARY_DIR})
-
 add_library(socket_wrapper SHARED socket_wrapper.c)
-
+target_include_directories(socket_wrapper
+                           PRIVATE
+                               ${CMAKE_BINARY_DIR})
 target_compile_options(socket_wrapper
                        PRIVATE
                           ${DEFAULT_C_COMPILE_FLAGS}
