@@ -49,7 +49,7 @@ configure_file(config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 add_subdirectory(src)
 
 if (UNIT_TESTING)
-    find_package(cmocka 0.4.1 REQUIRED)
+    find_package(cmocka 1.1.0 REQUIRED)
 
     include(AddCMockaTest)
     add_subdirectory(tests)
