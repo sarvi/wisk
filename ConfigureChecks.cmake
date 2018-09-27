@@ -70,24 +70,32 @@ check_function_exists(pledge HAVE_PLEDGE)
 
 
 if (UNIX)
+    find_library(DLFCN_LIBRARY dl)
+    if (DLFCN_LIBRARY)
+        string(APPEND _REQUIRED_LIBRARIES ${DLFCN_LIBRARY})
+    else()
+        check_function_exists(dlopen HAVE_DLOPEN)
+        if (NOT HAVE_DLOPEN)
+            message(FATAL_ERROR "FATAL: No dlopen() function detected")
+        endif()
+    endif()
+
     if (NOT LINUX)
         # libsocket (Solaris)
         check_library_exists(socket getaddrinfo "" HAVE_LIBSOCKET)
         if (HAVE_LIBSOCKET)
-          set(_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} socket)
+            string(APPEND _REQUIRED_LIBRARIES socket)
         endif (HAVE_LIBSOCKET)
 
         # libnsl/inet_pton (Solaris)
         check_library_exists(nsl inet_pton "" HAVE_LIBNSL)
         if (HAVE_LIBNSL)
-            set(_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} nsl)
+            string(APPEND _REQUIRED_LIBRARIES nsl)
         endif (HAVE_LIBNSL)
     endif (NOT LINUX)
 
     check_function_exists(getaddrinfo HAVE_GETADDRINFO)
 endif (UNIX)
-
-set(SWRAP_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} CACHE INTERNAL "socket_wrapper required system libraries")
 
 # STRUCTS
 check_struct_has_member("struct in_pktinfo" ipi_addr "sys/types.h;sys/socket.h;netinet/in.h" HAVE_STRUCT_IN_PKTINFO)
@@ -250,12 +258,6 @@ int main(void) {
 unset(CMAKE_REQUIRED_FLAGS)
 ###########################################################
 
-check_library_exists(dl dlopen "" HAVE_LIBDL)
-if (HAVE_LIBDL)
-    find_library(DLFCN_LIBRARY dl)
-    set(_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} ${DLFCN_LIBRARY})
-endif (HAVE_LIBDL)
-
 if (OSX)
     set(HAVE_APPLE 1)
 endif (OSX)
@@ -267,4 +269,4 @@ endif (NOT WIN32)
 
 check_type_size(pid_t SIZEOF_PID_T)
 
-set(SWRAP_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} CACHE INTERNAL "swrap required system libraries")
+set(SWRAP_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} CACHE INTERNAL "socket_wrapper required system libraries")
