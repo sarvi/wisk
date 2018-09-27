@@ -52,7 +52,6 @@ set(SWRAP_TESTS
     test_swrap_unit
     test_max_sockets
     test_close_failure
-    test_fork_thread_deadlock
     test_tcp_socket_overwrite
     ${SWRAP_THREADED_TESTS})
 
@@ -60,52 +59,47 @@ if (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
     set(SWRAP_TESTS ${SWRAP_TESTS} test_sendmsg_recvmsg_fd)
 endif (HAVE_STRUCT_MSGHDR_MSG_CONTROL)
 
-if (CMAKE_BUILD_TYPE)
-    string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
-    if (CMAKE_BUILD_TYPE_LOWER STREQUAL "addresssanitizer")
-        find_library(ASAN_LIBRARY
-                     NAMES asan)
-        if (NOT ASAN_LIBRARY)
-            foreach(version RANGE 10 1)
-                if (NOT ASAN_LIBRARY)
-                    find_library(ASAN_LIBRARY libasan.so.${version})
-                endif()
-            endforeach()
+function(ADD_CMOCKA_TEST_ENVIRONMENT _TEST_NAME)
+    if (CMAKE_BUILD_TYPE)
+        string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
+        if (CMAKE_BUILD_TYPE_LOWER STREQUAL "addresssanitizer")
+            find_library(ASAN_LIBRARY
+                         NAMES asan)
+            if (NOT ASAN_LIBRARY)
+                foreach(version RANGE 10 1)
+                    if (NOT ASAN_LIBRARY)
+                        find_library(ASAN_LIBRARY libasan.so.${version})
+                    endif()
+                endforeach()
+            endif()
         endif()
     endif()
-endif()
 
-if (ASAN_LIBRARY)
-    list(APPEND PRELOAD_LIBRARIES ${ASAN_LIBRARY})
-endif()
-
-list(APPEND PRELOAD_LIBRARIES ${SOCKET_WRAPPER_LOCATION})
-
-string(REPLACE ";" ":" TORTURE_ENVIRONMENT "${PRELOAD_LIBRARIES}")
-string(PREPEND TORTURE_ENVIRONMENT "LD_PRELOAD=")
-
-message(STATUS "TORTURE_ENVIRONMENT=${TORTURE_ENVIRONMENT}")
-
-foreach(_SWRAP_TEST ${SWRAP_TESTS})
-    add_cmocka_test(${_SWRAP_TEST} ${_SWRAP_TEST}.c ${TORTURE_LIBRARY})
-    target_compile_options(${_SWRAP_TEST}
-                           PRIVATE
-                               ${DEFAULT_C_COMPILE_FLAGS}
-                               -D_GNU_SOURCE)
+    if (ASAN_LIBRARY)
+        list(APPEND PRELOAD_LIBRARIES ${ASAN_LIBRARY})
+    endif()
+    list(APPEND PRELOAD_LIBRARIES ${SOCKET_WRAPPER_LOCATION})
 
     if (OSX)
-        set_property(
-            TEST
-                ${_SWRAP_TEST}
-            PROPERTY
-                ENVIRONMENT DYLD_FORCE_FLAT_NAMESPACE=1;DYLD_INSERT_LIBRARIES=${SOCKET_WRAPPER_LOCATION})
+        set(TORTURE_ENVIRONMENT "DYLD_FORCE_FLAT_NAMESPACE=1;DYLD_INSERT_LIBRARIES=${SOCKET_WRAPPER_LOCATION}")
     else ()
-        set_property(
-            TEST
-                ${_SWRAP_TEST}
-            PROPERTY
-                ENVIRONMENT ${TORTURE_ENVIRONMENT})
+        string(REPLACE ";" ":" TORTURE_ENVIRONMENT "${PRELOAD_LIBRARIES}")
+        string(PREPEND TORTURE_ENVIRONMENT "LD_PRELOAD=")
     endif()
+
+    set_property(TEST
+                    ${_TEST_NAME}
+                PROPERTY
+                    ENVIRONMENT "${TORTURE_ENVIRONMENT}")
+endfunction()
+
+foreach(_SWRAP_TEST ${SWRAP_TESTS})
+    add_cmocka_test(${_SWRAP_TEST}
+                    SOURCES ${_SWRAP_TEST}.c
+                    COMPILE_OPTIONS ${DEFAULT_C_COMPILE_FLAGS} -D_GNU_SOURCE
+                    LINK_LIBRARIES ${TORTURE_LIBRARY}
+                    LINK_OPTIONS ${DEFAULT_LINK_FLAGS})
+    add_cmocka_test_environment(${_SWRAP_TEST})
 endforeach()
 
 if (HELGRIND_TESTING)
@@ -138,5 +132,10 @@ endif()
 add_library(thread_deadlock SHARED thread_deadlock.c)
 target_link_libraries(thread_deadlock ${CMAKE_THREAD_LIBS_INIT})
 target_compile_options(thread_deadlock PRIVATE ${DEFAULT_C_COMPILE_FLAGS})
-target_link_libraries(test_fork_thread_deadlock thread_deadlock)
-target_compile_options(test_fork_thread_deadlock PRIVATE ${DEFAULT_C_COMPILE_FLAGS})
+
+add_cmocka_test(test_fork_thread_deadlock
+                SOURCES test_fork_thread_deadlock.c
+                COMPILE_OPTIONS ${DEFAULT_C_COMPILE_FLAGS} -D_GNU_SOURCE
+                LINK_LIBRARIES ${TORTURE_LIBRARY} thread_deadlock
+                LINK_OPTIONS ${DEFAULT_LINK_FLAGS})
+add_cmocka_test_environment(test_fork_thread_deadlock)
