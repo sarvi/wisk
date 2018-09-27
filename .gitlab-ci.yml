@@ -198,3 +198,22 @@ tumbleweed/static-analysis:
     when: on_failure
     paths:
       - obj/scan
+
+tumbleweed/helgrind:
+  image: $CI_REGISTRY/$BUILD_IMAGES_PROJECT:$TUMBLEWEED_BUILD
+  script:
+  - mkdir -p obj && cd obj && cmake
+    -DCMAKE_BUILD_TYPE=Debug
+    -DPICKY_DEVELOPER=ON
+    -DUNIT_TESTING=ON
+    -DHELGRIND_TESTING=ON .. &&
+    make -j$(nproc) && ctest --output-on-failure
+  tags:
+  - shared
+  except:
+  - tags
+  artifacts:
+    expire_in: 1 week
+    when: on_failure
+    paths:
+      - obj/
