@@ -198,11 +198,9 @@ static int become_daemon(void)
         return ret;
     }
 
-    for (fd = getdtablesize(); fd >= 0; --fd) {
-        close(fd);
-    }
-
     for (i = 0; i < 3; i++) {
+        close(i);
+
         fd = open("/dev/null", O_RDWR, 0);
         if (fd < 0) {
             fd = open("/dev/null", O_WRONLY, 0);
