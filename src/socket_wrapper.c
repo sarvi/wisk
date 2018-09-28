@@ -659,6 +659,12 @@ static void swrap_mutex_unlock(pthread_mutex_t *mutex)
 	}
 }
 
+/*
+ * These macros have a thread race condition on purpose!
+ *
+ * This is an optimization to avoid locking each time we check if the symbol is
+ * bound.
+ */
 #define swrap_bind_symbol_libc(sym_name) \
 	if (swrap.libc.symbols._libc_##sym_name.obj == NULL) { \
 		swrap_mutex_lock(&libc_symbol_binding_mutex); \

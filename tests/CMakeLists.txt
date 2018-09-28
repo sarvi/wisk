@@ -73,7 +73,7 @@ endforeach()
 if (HELGRIND_TESTING)
     find_program(VALGRIND_EXECUTABLE valgrind)
     if (VALGRIND_EXECUTABLE)
-        set(VALGRIND_HELGRIND_OPTIONS -v --trace-children=yes --tool=helgrind --error-exitcode=1 --read-var-info=yes)
+        set(VALGRIND_HELGRIND_OPTIONS -v --trace-children=yes --tool=helgrind --error-exitcode=1 --read-var-info=yes --suppressions=${CMAKE_CURRENT_SOURCE_DIR}/helgrind.supp)
 
         foreach(_TEST ${SWRAP_THREADED_TESTS})
             set(_HELGRIND_TEST "helgrind_${_TEST}")
