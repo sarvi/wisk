@@ -307,6 +307,9 @@ static pthread_mutex_t autobind_start_mutex;
 /* Mutex to guard the initialization of array of socket_info structures */
 static pthread_mutex_t sockets_mutex;
 
+/* Mutex to guard the socket reset in swrap_close() and swrap_remove_stale() */
+static pthread_mutex_t socket_reset_mutex;
+
 /* Mutex to synchronize access to first free index in socket_info array */
 static pthread_mutex_t first_free_mutex;
 
@@ -2034,14 +2037,19 @@ static void swrap_remove_stale(int fd)
 
 	SWRAP_LOG(SWRAP_LOG_TRACE, "remove stale wrapper for %d", fd);
 
+	swrap_mutex_lock(&socket_reset_mutex);
+
 	si_index = find_socket_info_index(fd);
 	if (si_index == -1) {
+		swrap_mutex_unlock(&socket_reset_mutex);
 		return;
 	}
 
-	si = swrap_get_socket_info(si_index);
-
 	reset_socket_info_index(fd);
+
+	swrap_mutex_unlock(&socket_reset_mutex);
+
+	si = swrap_get_socket_info(si_index);
 
 	swrap_mutex_lock(&first_free_mutex);
 	SWRAP_LOCK_SI(si);
@@ -5909,12 +5917,17 @@ static int swrap_close(int fd)
 	int si_index;
 	int ret;
 
+	swrap_mutex_lock(&socket_reset_mutex);
+
 	si_index = find_socket_info_index(fd);
 	if (si_index == -1) {
+		swrap_mutex_unlock(&socket_reset_mutex);
 		return libc_close(fd);
 	}
 
 	reset_socket_info_index(fd);
+
+	swrap_mutex_unlock(&socket_reset_mutex);
 
 	si = swrap_get_socket_info(si_index);
 
@@ -6196,6 +6209,13 @@ void swrap_constructor(void)
 		       &swrap_thread_child);
 
 	ret = socket_wrapper_init_mutex(&sockets_mutex);
+	if (ret != 0) {
+		SWRAP_LOG(SWRAP_LOG_ERROR,
+			  "Failed to initialize pthread mutex");
+		exit(-1);
+	}
+
+	ret = socket_wrapper_init_mutex(&socket_reset_mutex);
 	if (ret != 0) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
 			  "Failed to initialize pthread mutex");
