@@ -78,7 +78,7 @@ static void test_sendto_recvfrom_ipv4(void **state)
 			     0,
 			     &addr.sa.s,
 			     addr.sa_socklen);
-		assert_int_not_equal(ret, -1);
+		assert_return_code(ret, errno);
 
 		ret = recvfrom(s,
 			       recv_buf,
@@ -86,7 +86,7 @@ static void test_sendto_recvfrom_ipv4(void **state)
 			       0,
 			       &srv_in.sa.s,
 			       &srv_in.sa_socklen);
-		assert_int_not_equal(ret, -1);
+		assert_return_code(ret, errno);
 
 		a = inet_ntop(AF_INET, &srv_in.sa.in.sin_addr, ip, sizeof(ip));
 		assert_non_null(a);
@@ -101,7 +101,7 @@ static void test_sendto_recvfrom_ipv4(void **state)
 		     0,
 		     &addr.sa.s,
 		     addr.sa_socklen);
-	assert_int_not_equal(ret, -1);
+	assert_return_code(ret, errno);
 
 	ret = recvfrom(s,
 		       recv_buf,
@@ -109,7 +109,7 @@ static void test_sendto_recvfrom_ipv4(void **state)
 		       0,
 		       NULL,
 		       NULL);
-	assert_int_not_equal(ret, -1);
+	assert_return_code(ret, errno);
 
 	close(s);
 }
@@ -155,7 +155,7 @@ static void test_sendto_recvfrom_ipv6(void **state)
 			     0,
 			     &addr.sa.s,
 			     addr.sa_socklen);
-		assert_int_not_equal(ret, -1);
+		assert_return_code(ret, errno);
 
 		ret = recvfrom(s,
 			       recv_buf,
@@ -163,7 +163,7 @@ static void test_sendto_recvfrom_ipv6(void **state)
 			       0,
 			       &srv_in6.sa.s,
 			       &srv_in6.sa_socklen);
-		assert_int_not_equal(ret, -1);
+		assert_return_code(ret, errno);
 
 		a = inet_ntop(AF_INET6, &srv_in6.sa.in6.sin6_addr, ip, sizeof(ip));
 		assert_non_null(a);
@@ -178,7 +178,7 @@ static void test_sendto_recvfrom_ipv6(void **state)
 		     0,
 		     &addr.sa.s,
 		     addr.sa_socklen);
-	assert_int_not_equal(ret, -1);
+	assert_return_code(ret, errno);
 
 	ret = recvfrom(s,
 		       recv_buf,
@@ -186,7 +186,7 @@ static void test_sendto_recvfrom_ipv6(void **state)
 		       0,
 		       NULL,
 		       NULL);
-	assert_int_not_equal(ret, -1);
+	assert_return_code(ret, errno);
 
 	close(s);
 }
