@@ -64,6 +64,7 @@ static void test_sendmsg_recvmsg_ipv4(void **state)
 	assert_int_equal(rc, 1);
 
 	rc = connect(s, &addr.sa.s, addr.sa_socklen);
+	assert_return_code(rc, errno);
 
 	for (i = 0; i < 10; i++) {
 		struct torture_address reply_addr = {
@@ -145,6 +146,7 @@ static void test_sendmsg_recvmsg_ipv6(void **state)
 	assert_int_equal(rc, 1);
 
 	rc = connect(s, &addr.sa.s, addr.sa_socklen);
+	assert_return_code(rc, errno);
 
 	for (i = 0; i < 10; i++) {
 		struct torture_address reply_addr = {
@@ -222,6 +224,7 @@ static void test_sendmsg_recvmsg_ipv4_null(void **state)
 	assert_int_equal(rc, 1);
 
 	rc = connect(s, &send_addr.sa.s, send_addr.sa_socklen);
+	assert_return_code(rc, errno);
 
 	/* msg_name = NULL */
 
