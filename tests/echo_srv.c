@@ -33,7 +33,7 @@
 #define BACKLOG     5
 
 #ifndef BUFSIZE
-#define BUFSIZE     0x400000
+#define BUFSIZE     0x20000 /* 128K */
 #endif /* BUFSIZE */
 
 #ifndef discard_const
