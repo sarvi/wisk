@@ -231,6 +231,7 @@ static void test_sendmsg_recvmsg_ipv4_connected(void **state)
 	assert_int_equal(rc, 1);
 
 	rc = connect(s, &send_addr.sa.s, send_addr.sa_socklen);
+	assert_return_code(rc, errno);
 
 	iov.iov_base = (void *)payload;
 	iov.iov_len = sizeof(payload);
@@ -294,6 +295,7 @@ static void test_sendmsg_recvmsg_ipv4_connected_null(void **state)
 	assert_int_equal(rc, 1);
 
 	rc = connect(s, &send_addr.sa.s, send_addr.sa_socklen);
+	assert_return_code(rc, errno);
 
 	/* msg_name = NULL */
 
@@ -353,6 +355,7 @@ static void test_sendmsg_recvmsg_ipv4_connected_namelen(void **state)
 	assert_int_equal(rc, 1);
 
 	rc = connect(s, &send_addr.sa.s, send_addr.sa_socklen);
+	assert_return_code(rc, errno);
 
 	/* msg_name = NULL */
 
