@@ -68,7 +68,7 @@ static void *thread_worker(void *arg)
 		ret = write(s,
 			    send_buf,
 			    sizeof(send_buf));
-		assert_return_code(rc, errno);
+		assert_return_code(ret, errno);
 
 		ret = read(s,
 			   recv_buf,
