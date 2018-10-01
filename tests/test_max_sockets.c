@@ -22,7 +22,7 @@ static int setup(void **state)
 
 	ret = setenv("SOCKET_WRAPPER_MAX_SOCKETS", str, 1);
 
-	return 0;
+	return ret;
 }
 
 static int teardown(void **state)
