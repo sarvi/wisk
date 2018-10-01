@@ -23,6 +23,9 @@ static void test_tcp_socket_overwrite(void **state)
 {
 	struct torture_address addr_in = {
 		.sa_socklen = sizeof(struct sockaddr_in),
+		.sa.in = (struct sockaddr_in) {
+			.sin_family = AF_INET,
+		},
 	};
 
 	int s, dup_s, new_s, rc;
@@ -41,13 +44,6 @@ static void test_tcp_socket_overwrite(void **state)
 	assert_int_not_equal(new_s, -1);
 
 	close(new_s);
-
-	addr_in = (struct torture_address) {
-		.sa_socklen = sizeof(struct sockaddr_in),
-		.sa.in = (struct sockaddr_in) {
-			.sin_family = AF_INET,
-		},
-	};
 
 	rc = inet_pton(AF_INET, "127.0.0.20", &addr_in.sa.in.sin_addr);
 	assert_int_equal(rc, 1);
