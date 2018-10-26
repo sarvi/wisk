@@ -2055,8 +2055,6 @@ static void swrap_remove_stale(int fd)
 
 	reset_socket_info_index(fd);
 
-	swrap_mutex_unlock(&socket_reset_mutex);
-
 	si = swrap_get_socket_info(si_index);
 
 	swrap_mutex_lock(&first_free_mutex);
@@ -2078,6 +2076,7 @@ static void swrap_remove_stale(int fd)
 out:
 	SWRAP_UNLOCK_SI(si);
 	swrap_mutex_unlock(&first_free_mutex);
+	swrap_mutex_unlock(&socket_reset_mutex);
 }
 
 static int sockaddr_convert_to_un(struct socket_info *si,
@@ -5935,8 +5934,6 @@ static int swrap_close(int fd)
 
 	reset_socket_info_index(fd);
 
-	swrap_mutex_unlock(&socket_reset_mutex);
-
 	si = swrap_get_socket_info(si_index);
 
 	swrap_mutex_lock(&first_free_mutex);
@@ -5970,6 +5967,7 @@ static int swrap_close(int fd)
 out:
 	SWRAP_UNLOCK_SI(si);
 	swrap_mutex_unlock(&first_free_mutex);
+	swrap_mutex_unlock(&socket_reset_mutex);
 
 	return ret;
 }
