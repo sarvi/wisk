@@ -77,10 +77,7 @@ fedora/undefined-sanitizer:
     paths:
       - obj/
 
-# This runner is disabled because there is a threading race condition in
-# FreeBSD.
-# See https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=231848
-.freebsd/x86_64:
+freebsd/x86_64:
   image:
   script:
   - mkdir -p obj && cd obj && cmake
