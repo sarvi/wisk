@@ -102,6 +102,18 @@ foreach(_SWRAP_TEST ${SWRAP_TESTS})
     add_cmocka_test_environment(${_SWRAP_TEST})
 endforeach()
 
+# These test will fail on because there is a threading race condition in
+# FreeBSD.
+# See https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=231848
+if (FREEBSD)
+    set_tests_properties(test_thread_echo_tcp_connect
+                         PROPERTIES DISABLED TRUE)
+    set_tests_properties(test_thread_echo_tcp_write_read
+                         PROPERTIES DISABLED TRUE)
+    set_tests_properties(test_thread_echo_tcp_sendmsg_recvmsg
+                         PROPERTIES DISABLED TRUE)
+endif()
+
 if (HELGRIND_TESTING)
     find_program(VALGRIND_EXECUTABLE valgrind)
     if (VALGRIND_EXECUTABLE)
