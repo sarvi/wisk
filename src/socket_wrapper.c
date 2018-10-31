@@ -3098,6 +3098,7 @@ static int swrap_socket(int family, int type, int protocol)
 		memcpy(&si->myname.sa.in, &sin, si->myname.sa_socklen);
 		break;
 	}
+#ifdef HAVE_IPV6
 	case AF_INET6: {
 		struct sockaddr_in6 sin6 = {
 			.sin6_family = AF_INET6,
@@ -3107,6 +3108,7 @@ static int swrap_socket(int family, int type, int protocol)
 		memcpy(&si->myname.sa.in6, &sin6, si->myname.sa_socklen);
 		break;
 	}
+#endif
 	default:
 		errno = EINVAL;
 		return -1;
