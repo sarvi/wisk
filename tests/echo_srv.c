@@ -98,6 +98,7 @@ static const char *echo_server_address(int family)
 
 		return ECHO_SRV_IPV4;
 	}
+#ifdef HAVE_IPV6
 	case AF_INET6: {
 		const char *ip6 = getenv("TORTURE_SERVER_ADDRESS_IPV6");
 
@@ -107,6 +108,7 @@ static const char *echo_server_address(int family)
 
 		return ECHO_SRV_IPV6;
 	}
+#endif
 	default:
 		return NULL;
 	}
@@ -404,6 +406,7 @@ static int socket_dup(int s)
         }
         break;
     }
+#ifdef HAVE_IPV6
     case AF_INET6: {
         rc = memcmp(&cli_addr1.sa.in6, &cli_addr2.sa.in6, sizeof(struct sockaddr_in6));
         if (rc != 0) {
@@ -416,6 +419,7 @@ static int socket_dup(int s)
         }
         break;
     }
+#endif
     default:
         perror("family mismatch");
         close(s2);
@@ -464,6 +468,7 @@ static int socket_dup(int s)
         }
         break;
     }
+#ifdef HAVE_IPV6
     case AF_INET6: {
         rc = memcmp(&cli_addr1.sa.in6, &cli_addr2.sa.in6, sizeof(struct sockaddr_in6));
         if (rc != 0) {
@@ -476,6 +481,7 @@ static int socket_dup(int s)
         }
         break;
     }
+#endif
     default:
         perror("family mismatch");
         close(s);
