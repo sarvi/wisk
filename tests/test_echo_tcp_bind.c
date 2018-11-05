@@ -26,12 +26,14 @@ static int setup_echo_srv_tcp_ipv4(void **state)
 	return 0;
 }
 
+#ifdef HAVE_IPV6
 static int setup_echo_srv_tcp_ipv6(void **state)
 {
 	torture_setup_echo_srv_tcp_ipv6(state);
 
 	return 0;
 }
+#endif
 
 static int teardown(void **state)
 {
