@@ -33,15 +33,26 @@ static int teardown(void **state)
 static void _assert_sockaddr_equal(struct torture_address *addr, const char *a,
 				   const char * const file, const int line)
 {
+#ifdef HAVE_IPV6
 	char ip[INET6_ADDRSTRLEN] = { 0 };
+#else
+	char ip[INET_ADDRSTRLEN] = { 0 };
+#endif
 	const char *p;
 
+#ifdef HAVE_IPV6
 	p = inet_ntop(addr->sa.ss.ss_family,
 		      addr->sa.ss.ss_family == AF_INET6 ?
 		          (void *)&addr->sa.in6.sin6_addr :
 		          (void *)&addr->sa.in.sin_addr,
 		      ip,
 		      sizeof(ip));
+#else
+	p = inet_ntop(addr->sa.ss.ss_family,
+		      (void *)&addr->sa.in.sin_addr,
+		      ip,
+		      sizeof(ip));
+#endif
 	_assert_true(cast_ptr_to_largest_integral_type(p),
 		     "inet_ntop: Failed to convert IP address", file, line);
 
@@ -64,9 +75,11 @@ static void _assert_sockaddr_port_equal(struct torture_address *addr,
 	case AF_INET:
 		n_port = addr->sa.in.sin_port;
 		break;
+#ifdef HAVE_IPV6
 	case AF_INET6:
 		n_port = addr->sa.in6.sin6_port;
 		break;
+#endif
 	default:
 		return;
 	}
@@ -90,9 +103,11 @@ static void _assert_sockaddr_port_range_equal(struct torture_address *addr,
 	case AF_INET:
 		n_port = addr->sa.in.sin_port;
 		break;
+#ifdef HAVE_IPV6
 	case AF_INET6:
 		n_port = addr->sa.in6.sin6_port;
 		break;
+#endif
 	default:
 		return;
 	}
