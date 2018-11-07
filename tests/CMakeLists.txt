@@ -16,6 +16,11 @@ target_compile_options(echo_srv
                            ${DEFAULT_C_COMPILE_FLAGS}
                            -D_GNU_SOURCE)
 target_link_libraries(echo_srv ${SWRAP_REQUIRED_LIBRARIES})
+if (DEFINED DEFAULT_LINK_FLAGS)
+    set_target_properties(echo_srv
+                          PROPERTIES
+                              LINK_FLAGS ${DEFAULT_LINK_FLAGS})
+endif()
 
 add_library(${TORTURE_LIBRARY} STATIC torture.c)
 target_compile_options(${TORTURE_LIBRARY}
