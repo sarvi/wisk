@@ -269,5 +269,4 @@ endif (NOT WIN32)
 
 check_type_size(pid_t SIZEOF_PID_T)
 
-string(REPLACE ";" " " _REQUIRED_LIBRARIES "${_REQUIRED_LIBRARIES}")
 set(SWRAP_REQUIRED_LIBRARIES ${_REQUIRED_LIBRARIES} CACHE INTERNAL "socket_wrapper required system libraries")
