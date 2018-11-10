@@ -30,7 +30,7 @@
 #define ECHO_SRV_IPV6 "fd00::5357:5f0a"
 
 #define DFL_PORT    7
-#define BACKLOG     5
+#define BACKLOG     16
 
 #ifndef BUFSIZE
 #define BUFSIZE     0x20000 /* 128K */
