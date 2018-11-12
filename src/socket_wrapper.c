@@ -293,7 +293,7 @@ struct socket_info_container
 
 static struct socket_info_container *sockets;
 
-static size_t max_sockets = 0;
+static size_t socket_info_max = 0;
 
 /* Hash table to map fds to corresponding socket_info index */
 static int *socket_fds_idx;
@@ -1324,11 +1324,11 @@ static size_t socket_wrapper_max_sockets(void)
 	unsigned long tmp;
 	char *endp;
 
-	if (max_sockets != 0) {
-		return max_sockets;
+	if (socket_info_max != 0) {
+		return socket_info_max;
 	}
 
-	max_sockets = SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT;
+	socket_info_max = SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT;
 
 	s = getenv("SOCKET_WRAPPER_MAX_SOCKETS");
 	if (s == NULL || s[0] == '\0') {
@@ -1345,10 +1345,10 @@ static size_t socket_wrapper_max_sockets(void)
 		goto done;
 	}
 
-	max_sockets = tmp;
+	socket_info_max = tmp;
 
 done:
-	return max_sockets;
+	return socket_info_max;
 }
 
 static void socket_wrapper_init_fds_idx(void)
@@ -1377,6 +1377,7 @@ static void socket_wrapper_init_fds_idx(void)
 
 static void socket_wrapper_init_sockets(void)
 {
+	size_t max_sockets;
 	size_t i;
 	int ret;
 
@@ -1389,6 +1390,7 @@ static void socket_wrapper_init_sockets(void)
 
 	socket_wrapper_init_fds_idx();
 
+	/* Needs to be called inside the sockets_mutex lock here. */
 	max_sockets = socket_wrapper_max_sockets();
 
 	sockets = (struct socket_info_container *)calloc(max_sockets,
