@@ -31,6 +31,10 @@
 #cmakedefine HAVE_STRUCT_SOCKADDR_SA_LEN 1
 #cmakedefine HAVE_STRUCT_MSGHDR_MSG_CONTROL 1
 
+/**************************** SYMBOLS ****************************/
+
+#cmakedefine HAVE_PROGRAM_INVOCATION_SHORT_NAME 1
+
 /*************************** FUNCTIONS ***************************/
 
 /* Define to 1 if you have the `getaddrinfo' function. */
@@ -42,6 +46,8 @@
 #cmakedefine HAVE_ACCEPT4 1
 #cmakedefine HAVE_OPEN64 1
 #cmakedefine HAVE_FOPEN64 1
+#cmakedefine HAVE_GETPROGNAME 1
+#cmakedefine HAVE_GETEXECNAME 1
 #cmakedefine HAVE_PLEDGE 1
 
 #cmakedefine HAVE_ACCEPT_PSOCKLEN_T 1

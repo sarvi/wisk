@@ -54,6 +54,13 @@ check_include_file(sys/timerfd.h HAVE_SYS_TIMERFD_H)
 check_include_file(gnu/lib-names.h HAVE_GNU_LIB_NAMES_H)
 check_include_file(rpc/rpc.h HAVE_RPC_RPC_H)
 
+# SYMBOLS
+set(CMAKE_REQUIRED_FLAGS -D_GNU_SOURCE)
+check_symbol_exists(program_invocation_short_name
+                    "errno.h"
+                    HAVE_PROGRAM_INVOCATION_SHORT_NAME)
+unset(CMAKE_REQUIRED_FLAGS)
+
 # FUNCTIONS
 check_function_exists(strncpy HAVE_STRNCPY)
 check_function_exists(vsnprintf HAVE_VSNPRINTF)
@@ -65,6 +72,8 @@ check_function_exists(bindresvport HAVE_BINDRESVPORT)
 check_function_exists(accept4 HAVE_ACCEPT4)
 check_function_exists(open64 HAVE_OPEN64)
 check_function_exists(fopen64 HAVE_FOPEN64)
+check_function_exists(getprogname HAVE_GETPROGNAME)
+check_function_exists(getexecname HAVE_GETEXECNAME)
 
 check_function_exists(pledge HAVE_PLEDGE)
 

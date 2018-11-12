@@ -333,6 +333,19 @@ bool socket_wrapper_enabled(void);
 void swrap_constructor(void) CONSTRUCTOR_ATTRIBUTE;
 void swrap_destructor(void) DESTRUCTOR_ATTRIBUTE;
 
+#ifndef HAVE_GETPROGNAME
+static const char *getprogname(void)
+{
+#if defined(HAVE_PROGRAM_INVOCATION_SHORT_NAME)
+	return program_invocation_short_name;
+#elif defined(HAVE_GETEXECNAME)
+	return getexecname();
+#else
+	return NULL;
+#endif /* HAVE_PROGRAM_INVOCATION_SHORT_NAME */
+}
+#endif /* HAVE_GETPROGNAME */
+
 static void swrap_log(enum swrap_dbglvl_e dbglvl, const char *func, const char *format, ...) PRINTF_ATTRIBUTE(3, 4);
 # define SWRAP_LOG(dbglvl, ...) swrap_log((dbglvl), __func__, __VA_ARGS__)
 
@@ -345,6 +358,7 @@ static void swrap_log(enum swrap_dbglvl_e dbglvl,
 	const char *d;
 	unsigned int lvl = 0;
 	const char *prefix = "SWRAP";
+	const char *progname = getprogname();
 
 	d = getenv("SOCKET_WRAPPER_DEBUGLEVEL");
 	if (d != NULL) {
@@ -374,9 +388,17 @@ static void swrap_log(enum swrap_dbglvl_e dbglvl,
 			break;
 	}
 
+	if (progname == NULL) {
+		progname = "<unknown>";
+	}
+
 	fprintf(stderr,
-		"%s(%d) - %s: %s\n",
-		prefix, (int)getpid(), func, buffer);
+		"%s[%s (%u)] - %s: %s\n",
+		prefix,
+		progname,
+		(unsigned int)getpid(),
+		func,
+		buffer);
 }
 
 /*********************************************************
