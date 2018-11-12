@@ -295,6 +295,13 @@ static struct socket_info_container *sockets;
 
 static size_t socket_info_max = 0;
 
+/*
+ * Allocate the socket array always on the limit value. We want it to be
+ * at least bigger than the default so if we reach the limit we can
+ * still deal with duplicate fds pointing to the same socket_info.
+ */
+static size_t socket_fds_max = SOCKET_WRAPPER_MAX_SOCKETS_LIMIT;
+
 /* Hash table to map fds to corresponding socket_info index */
 static int *socket_fds_idx;
 
@@ -1360,7 +1367,7 @@ static void socket_wrapper_init_fds_idx(void)
 		return;
 	}
 
-	tmp = (int *)calloc(SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT, sizeof(int));
+	tmp = (int *)calloc(socket_fds_max, sizeof(int));
 	if (tmp == NULL) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
 			  "Failed to allocate socket fds index array: %s",
@@ -1368,7 +1375,7 @@ static void socket_wrapper_init_fds_idx(void)
 		exit(-1);
 	}
 
-	for (i = 0; i < SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT; i++) {
+	for (i = 0; i < socket_fds_max; i++) {
 		tmp[i] = -1;
 	}
 
@@ -1500,11 +1507,11 @@ static int find_socket_info_index(int fd)
 		return -1;
 	}
 
-	if (fd >= SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT) {
+	if (fd >= socket_fds_max) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
-			  "The max socket index limit of %u has been reached, "
+			  "The max socket index limit of %zu has been reached, "
 			  "trying to add %d",
-			  SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT,
+			  socket_fds_max,
 			  fd);
 		return -1;
 	}
@@ -1551,11 +1558,11 @@ static int swrap_create_socket(struct socket_info *si, int fd)
 {
 	int idx;
 
-	if (fd >= SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT) {
+	if (fd >= socket_fds_max) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
-			  "The max socket index limit of %u has been reached, "
+			  "The max socket index limit of %zu has been reached, "
 			  "trying to add %d",
-			  SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT,
+			  socket_fds_max,
 			  fd);
 		return -1;
 	}
@@ -6253,7 +6260,7 @@ void swrap_destructor(void)
 	size_t i;
 
 	if (socket_fds_idx != NULL) {
-		for (i = 0; i < SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT; ++i) {
+		for (i = 0; i < socket_fds_max; ++i) {
 			if (socket_fds_idx[i] != -1) {
 				swrap_close(i);
 			}
