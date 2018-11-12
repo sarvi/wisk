@@ -11,7 +11,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules")
 include(DefineCMakeDefaults)
 include(DefineCompilerFlags)
 
-project(socket_wrapper VERSION 1.1.9 LANGUAGES C)
+project(socket_wrapper VERSION 1.2.0 LANGUAGES C)
 
 # global needed variables
 set(APPLICATION_NAME ${PROJECT_NAME})
@@ -23,7 +23,7 @@ set(APPLICATION_NAME ${PROJECT_NAME})
 #     Increment AGE. Set REVISION to 0
 #   If the source code was changed, but there were no interface changes:
 #     Increment REVISION.
-set(LIBRARY_VERSION "0.1.9")
+set(LIBRARY_VERSION "0.1.10")
 set(LIBRARY_SOVERSION "0")
 
 # add definitions
