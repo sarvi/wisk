@@ -3161,9 +3161,10 @@ static int swrap_socket(int family, int type, int protocol)
 	}
 
 	SWRAP_LOG(SWRAP_LOG_TRACE,
-		  "Created %s socket for protocol %s",
+		  "Created %s socket for protocol %s, fd=%d",
 		  family == AF_INET ? "IPv4" : "IPv6",
-		  real_type == SOCK_DGRAM ? "UDP" : "TCP");
+		  real_type == SOCK_DGRAM ? "UDP" : "TCP",
+		  fd);
 
 	return fd;
 }
