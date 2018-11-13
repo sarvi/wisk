@@ -1540,11 +1540,23 @@ static int find_socket_info_index(int fd)
 	}
 
 	if ((size_t)fd >= socket_fds_max) {
+		/*
+		 * Do not add a log here as some applications do stupid things
+		 * like:
+		 *
+		 *     for (fd = 0; fd <= getdtablesize(); fd++) {
+		 *         close(fd)
+		 *     };
+		 *
+		 * This would produce millions of lines of debug messages.
+		 */
+#if 0
 		SWRAP_LOG(SWRAP_LOG_ERROR,
-			  "The max socket index limit of %zu has been reached, "
-			  "trying to add %d",
-			  socket_fds_max,
-			  fd);
+			  "Looking for a socket info for the fd %d is over the "
+			  "max socket index limit of %zu.",
+			  fd,
+			  socket_fds_max);
+#endif
 		return -1;
 	}
 
