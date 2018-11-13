@@ -1539,7 +1539,7 @@ static int find_socket_info_index(int fd)
 		return -1;
 	}
 
-	if (fd >= socket_fds_max) {
+	if ((size_t)fd >= socket_fds_max) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
 			  "The max socket index limit of %zu has been reached, "
 			  "trying to add %d",
@@ -1590,7 +1590,7 @@ static int swrap_create_socket(struct socket_info *si, int fd)
 {
 	int idx;
 
-	if (fd >= socket_fds_max) {
+	if ((size_t)fd >= socket_fds_max) {
 		SWRAP_LOG(SWRAP_LOG_ERROR,
 			  "The max socket index limit of %zu has been reached, "
 			  "trying to add %d",
