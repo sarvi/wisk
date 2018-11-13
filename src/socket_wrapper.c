@@ -230,7 +230,7 @@ enum swrap_dbglvl_e {
  */
 #define SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT 65535
 
-#define SOCKET_WRAPPER_MAX_SOCKETS_LIMIT 256000
+#define SOCKET_WRAPPER_MAX_SOCKETS_LIMIT 262140
 
 /* This limit is to avoid broadcast sendto() needing to stat too many
  * files.  It may be raised (with a performance cost) to up to 254
@@ -1328,7 +1328,7 @@ done:
 static size_t socket_wrapper_max_sockets(void)
 {
 	const char *s;
-	unsigned long tmp;
+	size_t tmp;
 	char *endp;
 
 	if (socket_info_max != 0) {
@@ -1346,10 +1346,20 @@ static size_t socket_wrapper_max_sockets(void)
 	if (s == endp) {
 		goto done;
 	}
-	if (tmp == 0 || tmp > SOCKET_WRAPPER_MAX_SOCKETS_LIMIT) {
+	if (tmp == 0) {
+		tmp = SOCKET_WRAPPER_MAX_SOCKETS_DEFAULT;
 		SWRAP_LOG(SWRAP_LOG_ERROR,
-			  "Invalid number of sockets specified, using default.");
-		goto done;
+			  "Invalid number of sockets specified, "
+			  "using default (%zu)",
+			  tmp);
+	}
+
+	if (tmp > SOCKET_WRAPPER_MAX_SOCKETS_LIMIT) {
+		tmp = SOCKET_WRAPPER_MAX_SOCKETS_LIMIT;
+		SWRAP_LOG(SWRAP_LOG_ERROR,
+			  "Invalid number of sockets specified, "
+			  "using maximum (%zu).",
+			  tmp);
 	}
 
 	socket_info_max = tmp;
