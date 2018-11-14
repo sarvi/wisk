@@ -1,6 +1,9 @@
 ChangeLog
 ==========
 
+version 1.2.1 (released 2018-11-14)
+  * Removed error message to fix applications doing stupid things
+
 version 1.2.0 (released 2018-11-13)
   * Added threading support
   * Moved to modern cmake
