@@ -2012,7 +2012,7 @@ static bool check_addr_port_in_use(const struct sockaddr *sa, socklen_t len)
 			return false;
 		}
 		break;
-#if HAVE_IPV6
+#ifdef HAVE_IPV6
 	case AF_INET6:
 		if (len < sizeof(struct sockaddr_in6)) {
 			return false;
@@ -2059,7 +2059,7 @@ static bool check_addr_port_in_use(const struct sockaddr *sa, socklen_t len)
 			return true;
 			break;
 		}
-#if HAVE_IPV6
+#ifdef HAVE_IPV6
 		case AF_INET6: {
 			struct sockaddr_in6 *sin1, *sin2;
 
@@ -5303,7 +5303,7 @@ static ssize_t swrap_sendto(int s, const void *buf, size_t len, int flags,
 	msg.msg_namelen = tolen;       /* size of address */
 	msg.msg_iov = &tmp;            /* scatter/gather array */
 	msg.msg_iovlen = 1;            /* # elements in msg_iov */
-#if HAVE_STRUCT_MSGHDR_MSG_CONTROL
+#ifdef HAVE_STRUCT_MSGHDR_MSG_CONTROL
 	msg.msg_control = NULL;        /* ancillary data, see below */
 	msg.msg_controllen = 0;        /* ancillary data buffer len */
 	msg.msg_flags = 0;             /* flags on received message */
@@ -5534,7 +5534,7 @@ static ssize_t swrap_write(int s, const void *buf, size_t len)
 	msg.msg_namelen = 0;           /* size of address */
 	msg.msg_iov = &tmp;            /* scatter/gather array */
 	msg.msg_iovlen = 1;            /* # elements in msg_iov */
-#if HAVE_STRUCT_MSGHDR_MSG_CONTROL
+#ifdef HAVE_STRUCT_MSGHDR_MSG_CONTROL
 	msg.msg_control = NULL;        /* ancillary data, see below */
 	msg.msg_controllen = 0;        /* ancillary data buffer len */
 	msg.msg_flags = 0;             /* flags on received message */
@@ -5585,7 +5585,7 @@ static ssize_t swrap_send(int s, const void *buf, size_t len, int flags)
 	msg.msg_namelen = 0;           /* size of address */
 	msg.msg_iov = &tmp;            /* scatter/gather array */
 	msg.msg_iovlen = 1;            /* # elements in msg_iov */
-#if HAVE_STRUCT_MSGHDR_MSG_CONTROL
+#ifdef HAVE_STRUCT_MSGHDR_MSG_CONTROL
 	msg.msg_control = NULL;        /* ancillary data, see below */
 	msg.msg_controllen = 0;        /* ancillary data buffer len */
 	msg.msg_flags = 0;             /* flags on received message */
@@ -5949,7 +5949,7 @@ static ssize_t swrap_writev(int s, const struct iovec *vector, int count)
 	msg.msg_namelen = 0;           /* size of address */
 	msg.msg_iov = discard_const_p(struct iovec, vector); /* scatter/gather array */
 	msg.msg_iovlen = count;        /* # elements in msg_iov */
-#if HAVE_STRUCT_MSGHDR_MSG_CONTROL
+#ifdef HAVE_STRUCT_MSGHDR_MSG_CONTROL
 	msg.msg_control = NULL;        /* ancillary data, see below */
 	msg.msg_controllen = 0;        /* ancillary data buffer len */
 	msg.msg_flags = 0;             /* flags on received message */
