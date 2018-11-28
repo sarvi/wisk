@@ -127,7 +127,7 @@ if (HELGRIND_TESTING)
                     TEST
                         ${_HELGRIND_TEST}
                     PROPERTY
-                        ENVIRONMENT LD_PRELOAD=${SOCKET_WRAPPER_LOCATION})
+                        ENVIRONMENT LD_PRELOAD=${SOCKET_WRAPPER_LOCATION} SOCKET_WRAPPER_DISABLE_DEEPBIND=1)
             endif()
         endforeach()
     endif()
