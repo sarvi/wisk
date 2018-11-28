@@ -2,12 +2,12 @@
 .\"     Title: socket_wrapper
 .\"    Author: Samba Team
 .\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 2018-06-26
+.\"      Date: 2018-11-28
 .\"    Manual: \ \&
 .\"    Source: \ \&
 .\"  Language: English
 .\"
-.TH "SOCKET_WRAPPER" "1" "2018\-06\-26" "\ \&" "\ \&"
+.TH "SOCKET_WRAPPER" "1" "2018\-11\-28" "\ \&" "\ \&"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -146,6 +146,11 @@ If you need to see what is going on in socket_wrapper itself or try to find a bu
 .\}
 3 = TRACE
 .RE
+.RE
+.PP
+\fBSOCKET_WRAPPER_DISABLE_DEEPBIND\fR
+.RS 4
+This allows you to disable deep binding in socket_wrapper\&. This is useful for running valgrind tools or sanitizers like (address, undefined, thread)\&.
 .RE
 .SH "EXAMPLE"
 .sp

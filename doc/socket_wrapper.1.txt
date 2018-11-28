@@ -1,6 +1,6 @@
 socket_wrapper(1)
 =================
-:revdate: 2018-06-26
+:revdate: 2018-11-28
 :author: Samba Team
 
 NAME
@@ -77,6 +77,11 @@ debug symbols.
 - 1 = WARNING
 - 2 = DEBUG
 - 3 = TRACE
+
+*SOCKET_WRAPPER_DISABLE_DEEPBIND*::
+
+This allows you to disable deep binding in socket_wrapper. This is useful for
+running valgrind tools or sanitizers like (address, undefined, thread).
 
 EXAMPLE
 -------
