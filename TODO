@@ -10,7 +10,6 @@ Library:
 ---------
 
 Goals:
-* Thread safety
 * The proposed way ==> - fd-passing for tcp sockets (for free)
   Approach:
   - tdb "in small". So a "db file".
@@ -30,4 +29,3 @@ Testing:
 * Add a test for sento() to broadcast 255.255.255.255.
 * Add a test to check that read/readv/send/ only work on connected sockets.
 * Add unit tests for conversion functions like convert_in_un_remote().
-* Add threaded tests.
