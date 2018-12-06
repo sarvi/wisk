@@ -555,7 +555,7 @@ struct swrap {
 static struct swrap swrap;
 
 /* prototypes */
-static const char *socket_wrapper_dir(void);
+static char *socket_wrapper_dir(void);
 
 #define LIBC_NAME "libc.so"
 
@@ -1284,19 +1284,25 @@ static void swrap_set_next_free(struct socket_info *si, int next_free)
 	sic->meta.next_free = next_free;
 }
 
-static const char *socket_wrapper_dir(void)
+static char *socket_wrapper_dir(void)
 {
-	const char *s = getenv("SOCKET_WRAPPER_DIR");
+	char *swrap_dir = NULL;
+	char *s = getenv("SOCKET_WRAPPER_DIR");
+
 	if (s == NULL) {
 		return NULL;
 	}
-	/* TODO use realpath(3) here, when we add support for threads */
-	if (strncmp(s, "./", 2) == 0) {
-		s += 2;
+
+	swrap_dir = realpath(s, NULL);
+	if (swrap_dir == NULL) {
+		SWRAP_LOG(SWRAP_LOG_ERROR,
+			  "Unable to resolve socket_wrapper dir path: %s",
+			  strerror(errno));
+		return NULL;
 	}
 
-	SWRAP_LOG(SWRAP_LOG_TRACE, "socket_wrapper_dir: %s", s);
-	return s;
+	SWRAP_LOG(SWRAP_LOG_TRACE, "socket_wrapper_dir: %s", swrap_dir);
+	return swrap_dir;
 }
 
 static unsigned int socket_wrapper_mtu(void)
@@ -1501,11 +1507,13 @@ done:
 
 bool socket_wrapper_enabled(void)
 {
-	const char *s = socket_wrapper_dir();
+	char *s = socket_wrapper_dir();
 
 	if (s == NULL) {
 		return false;
 	}
+
+	SAFE_FREE(s);
 
 	socket_wrapper_init_sockets();
 
@@ -1712,6 +1720,7 @@ static int convert_in_un_remote(struct socket_info *si, const struct sockaddr *i
 	unsigned int prt;
 	unsigned int iface;
 	int is_bcast = 0;
+	char *swrap_dir = NULL;
 
 	if (bcast) *bcast = 0;
 
@@ -1810,17 +1819,22 @@ static int convert_in_un_remote(struct socket_info *si, const struct sockaddr *i
 		return -1;
 	}
 
+	swrap_dir = socket_wrapper_dir();
+
 	if (is_bcast) {
-		snprintf(un->sun_path, sizeof(un->sun_path), "%s/EINVAL",
-			 socket_wrapper_dir());
+		snprintf(un->sun_path, sizeof(un->sun_path),
+			 "%s/EINVAL", swrap_dir);
 		SWRAP_LOG(SWRAP_LOG_DEBUG, "un path [%s]", un->sun_path);
+		SAFE_FREE(swrap_dir);
 		/* the caller need to do more processing */
 		return 0;
 	}
 
 	snprintf(un->sun_path, sizeof(un->sun_path), "%s/"SOCKET_FORMAT,
-		 socket_wrapper_dir(), type, iface, prt);
+		 swrap_dir, type, iface, prt);
 	SWRAP_LOG(SWRAP_LOG_DEBUG, "un path [%s]", un->sun_path);
+
+	SAFE_FREE(swrap_dir);
 
 	return 0;
 }
@@ -1833,6 +1847,7 @@ static int convert_in_un_alloc(struct socket_info *si, const struct sockaddr *in
 	unsigned int iface;
 	struct stat st;
 	int is_bcast = 0;
+	char *swrap_dir = NULL;
 
 	if (bcast) *bcast = 0;
 
@@ -1974,11 +1989,13 @@ static int convert_in_un_alloc(struct socket_info *si, const struct sockaddr *in
 		return -1;
 	}
 
+	swrap_dir = socket_wrapper_dir();
+
 	if (prt == 0) {
 		/* handle auto-allocation of ephemeral ports */
 		for (prt = 5001; prt < 10000; prt++) {
 			snprintf(un->sun_path, sizeof(un->sun_path), "%s/"SOCKET_FORMAT,
-				 socket_wrapper_dir(), type, iface, prt);
+				 swrap_dir, type, iface, prt);
 			if (stat(un->sun_path, &st) == 0) continue;
 
 			set_port(si->family, prt, &si->myname);
@@ -1986,15 +2003,20 @@ static int convert_in_un_alloc(struct socket_info *si, const struct sockaddr *in
 
 			break;
 		}
+
 		if (prt == 10000) {
 			errno = ENFILE;
+			SAFE_FREE(swrap_dir);
 			return -1;
 		}
 	}
 
 	snprintf(un->sun_path, sizeof(un->sun_path), "%s/"SOCKET_FORMAT,
-		 socket_wrapper_dir(), type, iface, prt);
+		 swrap_dir, type, iface, prt);
 	SWRAP_LOG(SWRAP_LOG_DEBUG, "un path [%s]", un->sun_path);
+
+	SAFE_FREE(swrap_dir);
+
 	return 0;
 }
 
@@ -3456,6 +3478,7 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 	int ret;
 	int port;
 	struct stat st;
+	char *swrap_dir = NULL;
 
 	swrap_mutex_lock(&autobind_start_mutex);
 
@@ -3541,11 +3564,13 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 		autobind_start = 10000;
 	}
 
+	swrap_dir = socket_wrapper_dir();
+
 	for (i = 0; i < SOCKET_MAX_SOCKETS; i++) {
 		port = autobind_start + i;
 		snprintf(un_addr.sa.un.sun_path, sizeof(un_addr.sa.un.sun_path),
-			 "%s/"SOCKET_FORMAT, socket_wrapper_dir(),
-			 type, socket_wrapper_default_iface(), port);
+			 "%s/"SOCKET_FORMAT, swrap_dir, type,
+			 socket_wrapper_default_iface(), port);
 		if (stat(un_addr.sa.un.sun_path, &st) == 0) continue;
 
 		ret = libc_bind(fd, &un_addr.sa.s, un_addr.sa_socklen);
@@ -3577,6 +3602,7 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 	ret = 0;
 
 done:
+	SAFE_FREE(swrap_dir);
 	swrap_mutex_unlock(&autobind_start_mutex);
 	return ret;
 }
@@ -5339,14 +5365,16 @@ static ssize_t swrap_sendto(int s, const void *buf, size_t len, int flags,
 		unsigned int iface;
 		unsigned int prt = ntohs(((const struct sockaddr_in *)(const void *)to)->sin_port);
 		char type;
+		char *swrap_dir = NULL;
 
 		type = SOCKET_TYPE_CHAR_UDP;
+
+		swrap_dir = socket_wrapper_dir();
 
 		for(iface=0; iface <= MAX_WRAPPED_INTERFACES; iface++) {
 			snprintf(un_addr.sa.un.sun_path,
 				 sizeof(un_addr.sa.un.sun_path),
-				 "%s/"SOCKET_FORMAT,
-				 socket_wrapper_dir(), type, iface, prt);
+				 "%s/"SOCKET_FORMAT, swrap_dir, type, iface, prt);
 			if (stat(un_addr.sa.un.sun_path, &st) != 0) continue;
 
 			/* ignore the any errors in broadcast sends */
@@ -5357,6 +5385,8 @@ static ssize_t swrap_sendto(int s, const void *buf, size_t len, int flags,
 				    &un_addr.sa.s,
 				    un_addr.sa_socklen);
 		}
+
+		SAFE_FREE(swrap_dir);
 
 		SWRAP_LOCK_SI(si);
 
@@ -5818,6 +5848,7 @@ static ssize_t swrap_sendmsg(int s, const struct msghdr *omsg, int flags)
 		off_t ofs = 0;
 		size_t avail = 0;
 		size_t remain;
+		char *swrap_dir = NULL;
 
 		for (i = 0; i < (size_t)msg.msg_iovlen; i++) {
 			avail += msg.msg_iov[i].iov_len;
@@ -5843,9 +5874,11 @@ static ssize_t swrap_sendmsg(int s, const struct msghdr *omsg, int flags)
 
 		type = SOCKET_TYPE_CHAR_UDP;
 
+		swrap_dir = socket_wrapper_dir();
+
 		for(iface=0; iface <= MAX_WRAPPED_INTERFACES; iface++) {
 			snprintf(un_addr.sun_path, sizeof(un_addr.sun_path), "%s/"SOCKET_FORMAT,
-				 socket_wrapper_dir(), type, iface, prt);
+				 swrap_dir, type, iface, prt);
 			if (stat(un_addr.sun_path, &st) != 0) continue;
 
 			msg.msg_name = &un_addr;           /* optional address */
@@ -5854,6 +5887,8 @@ static ssize_t swrap_sendmsg(int s, const struct msghdr *omsg, int flags)
 			/* ignore the any errors in broadcast sends */
 			libc_sendmsg(s, &msg, flags);
 		}
+
+		SAFE_FREE(swrap_dir);
 
 		SWRAP_LOCK_SI(si);
 
