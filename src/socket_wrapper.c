@@ -4752,6 +4752,11 @@ static ssize_t swrap_sendmsg_before(int fd,
 		for (i = 0; i < (size_t)msg->msg_iovlen; i++) {
 			size_t nlen;
 			nlen = len + msg->msg_iov[i].iov_len;
+			if (nlen < len) {
+				/* overflow */
+				errno = EMSGSIZE;
+				goto out;
+			}
 			if (nlen > mtu) {
 				break;
 			}
