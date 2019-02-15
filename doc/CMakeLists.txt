@@ -1,4 +1,4 @@
 install(FILES
             socket_wrapper.1
         DESTINATION
-            ${MAN_INSTALL_DIR}/man1)
+            ${CMAKE_INSTALL_MANDIR}/man1)

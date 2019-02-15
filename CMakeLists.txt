@@ -28,10 +28,10 @@ set(LIBRARY_SOVERSION "0")
 
 # add definitions
 include(DefinePlatformDefaults)
-include(DefineInstallationPaths)
 include(DefineOptions.cmake)
 include(CPackConfig.cmake)
 include(CompilerChecks.cmake)
+include(GNUInstallDirs)
 
 # disallow in-source build
 include(MacroEnsureOutOfSourceBuild)
@@ -63,7 +63,7 @@ install(
   FILES
     ${CMAKE_CURRENT_BINARY_DIR}/socket_wrapper.pc
   DESTINATION
-    ${LIB_INSTALL_DIR}/pkgconfig
+      ${CMAKE_INSTALL_LIBDIR}/pkgconfig
   COMPONENT
     pkgconfig
 )
@@ -76,7 +76,7 @@ install(
         ${CMAKE_CURRENT_BINARY_DIR}/socket_wrapper-config-version.cmake
         ${CMAKE_CURRENT_BINARY_DIR}/socket_wrapper-config.cmake
     DESTINATION
-        ${CMAKE_INSTALL_DIR}/socket_wrapper
+        ${CMAKE_INSTALL_LIBDIR}/cmake/socket_wrapper
     COMPONENT
         devel
 )
