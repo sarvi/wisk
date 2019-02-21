@@ -610,7 +610,6 @@ static void *swrap_load_lib_handle(enum swrap_lib lib)
 
 	switch (lib) {
 	case SWRAP_LIBNSL:
-		FALL_THROUGH;
 	case SWRAP_LIBSOCKET:
 #ifdef HAVE_LIBSOCKET
 		handle = swrap.libc.socket_handle;
@@ -629,7 +628,6 @@ static void *swrap_load_lib_handle(enum swrap_lib lib)
 		}
 		break;
 #endif
-		FALL_THROUGH;
 	case SWRAP_LIBC:
 		handle = swrap.libc.handle;
 #ifdef LIBC_SO
