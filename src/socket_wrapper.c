@@ -2461,14 +2461,20 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 				       int unreachable,
 				       size_t *_packet_len)
 {
-	uint8_t *base;
-	uint8_t *buf;
-	struct swrap_packet_frame *frame;
-	union swrap_packet_ip *ip;
+	uint8_t *base = NULL;
+	uint8_t *buf = NULL;
+	union {
+		uint8_t *ptr;
+		struct swrap_packet_frame *frame;
+	} f;
+	union {
+		uint8_t *ptr;
+		union swrap_packet_ip *ip;
+	} i;
 	union swrap_packet_payload *pay;
 	size_t packet_len;
 	size_t alloc_len;
-	size_t nonwire_len = sizeof(*frame);
+	size_t nonwire_len = sizeof(struct swrap_packet_frame);
 	size_t wire_hdr_len = 0;
 	size_t wire_len = 0;
 	size_t ip_hdr_len = 0;
@@ -2490,7 +2496,7 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 		dest_in = (const struct sockaddr_in *)(const void *)dest;
 		src_port = src_in->sin_port;
 		dest_port = dest_in->sin_port;
-		ip_hdr_len = sizeof(ip->v4);
+		ip_hdr_len = sizeof(i.ip->v4);
 		break;
 #ifdef HAVE_IPV6
 	case AF_INET6:
@@ -2498,7 +2504,7 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 		dest_in6 = (const struct sockaddr_in6 *)(const void *)dest;
 		src_port = src_in6->sin6_port;
 		dest_port = dest_in6->sin6_port;
-		ip_hdr_len = sizeof(ip->v6);
+		ip_hdr_len = sizeof(i.ip->v6);
 		break;
 #endif
 	default:
@@ -2554,39 +2560,40 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 	}
 
 	buf = base;
+	f.ptr = buf;
 
-	frame = (struct swrap_packet_frame *)(void *)buf;
-	frame->seconds		= tval->tv_sec;
-	frame->micro_seconds	= tval->tv_usec;
-	frame->recorded_length	= wire_len - icmp_truncate_len;
-	frame->full_length	= wire_len - icmp_truncate_len;
+	f.frame->seconds		= tval->tv_sec;
+	f.frame->micro_seconds	= tval->tv_usec;
+	f.frame->recorded_length	= wire_len - icmp_truncate_len;
+	f.frame->full_length	= wire_len - icmp_truncate_len;
+
 	buf += SWRAP_PACKET_FRAME_SIZE;
 
-	ip = (union swrap_packet_ip *)(void *)buf;
+	i.ptr = buf;
 	switch (src->sa_family) {
 	case AF_INET:
-		ip->v4.ver_hdrlen	= 0x45; /* version 4 and 5 * 32 bit words */
-		ip->v4.tos		= 0x00;
-		ip->v4.packet_length	= htons(wire_len - icmp_truncate_len);
-		ip->v4.identification	= htons(0xFFFF);
-		ip->v4.flags		= 0x40; /* BIT 1 set - means don't fragment */
-		ip->v4.fragment		= htons(0x0000);
-		ip->v4.ttl		= 0xFF;
-		ip->v4.protocol		= protocol;
-		ip->v4.hdr_checksum	= htons(0x0000);
-		ip->v4.src_addr		= src_in->sin_addr.s_addr;
-		ip->v4.dest_addr	= dest_in->sin_addr.s_addr;
+		i.ip->v4.ver_hdrlen	= 0x45; /* version 4 and 5 * 32 bit words */
+		i.ip->v4.tos		= 0x00;
+		i.ip->v4.packet_length	= htons(wire_len - icmp_truncate_len);
+		i.ip->v4.identification	= htons(0xFFFF);
+		i.ip->v4.flags		= 0x40; /* BIT 1 set - means don't fragment */
+		i.ip->v4.fragment	= htons(0x0000);
+		i.ip->v4.ttl		= 0xFF;
+		i.ip->v4.protocol	= protocol;
+		i.ip->v4.hdr_checksum	= htons(0x0000);
+		i.ip->v4.src_addr	= src_in->sin_addr.s_addr;
+		i.ip->v4.dest_addr	= dest_in->sin_addr.s_addr;
 		buf += SWRAP_PACKET_IP_V4_SIZE;
 		break;
 #ifdef HAVE_IPV6
 	case AF_INET6:
-		ip->v6.ver_prio		= 0x60; /* version 4 and 5 * 32 bit words */
-		ip->v6.flow_label_high	= 0x00;
-		ip->v6.flow_label_low	= 0x0000;
-		ip->v6.payload_length	= htons(wire_len - icmp_truncate_len); /* TODO */
-		ip->v6.next_header	= protocol;
-		memcpy(ip->v6.src_addr, src_in6->sin6_addr.s6_addr, 16);
-		memcpy(ip->v6.dest_addr, dest_in6->sin6_addr.s6_addr, 16);
+		i.ip->v6.ver_prio		= 0x60; /* version 4 and 5 * 32 bit words */
+		i.ip->v6.flow_label_high	= 0x00;
+		i.ip->v6.flow_label_low	= 0x0000;
+		i.ip->v6.payload_length	= htons(wire_len - icmp_truncate_len); /* TODO */
+		i.ip->v6.next_header	= protocol;
+		memcpy(i.ip->v6.src_addr, src_in6->sin6_addr.s6_addr, 16);
+		memcpy(i.ip->v6.dest_addr, dest_in6->sin6_addr.s6_addr, 16);
 		buf += SWRAP_PACKET_IP_V6_SIZE;
 		break;
 #endif
@@ -2600,21 +2607,23 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 			pay->icmp4.code		= 0x01; /* host unreachable */
 			pay->icmp4.checksum	= htons(0x0000);
 			pay->icmp4.unused	= htonl(0x00000000);
+
 			buf += SWRAP_PACKET_PAYLOAD_ICMP4_SIZE;
 
 			/* set the ip header in the ICMP payload */
-			ip = (union swrap_packet_ip *)(void *)buf;
-			ip->v4.ver_hdrlen	= 0x45; /* version 4 and 5 * 32 bit words */
-			ip->v4.tos		= 0x00;
-			ip->v4.packet_length	= htons(wire_len - icmp_hdr_len);
-			ip->v4.identification	= htons(0xFFFF);
-			ip->v4.flags		= 0x40; /* BIT 1 set - means don't fragment */
-			ip->v4.fragment		= htons(0x0000);
-			ip->v4.ttl		= 0xFF;
-			ip->v4.protocol		= icmp_protocol;
-			ip->v4.hdr_checksum	= htons(0x0000);
-			ip->v4.src_addr		= dest_in->sin_addr.s_addr;
-			ip->v4.dest_addr	= src_in->sin_addr.s_addr;
+			i.ptr = buf;
+			i.ip->v4.ver_hdrlen	= 0x45; /* version 4 and 5 * 32 bit words */
+			i.ip->v4.tos		= 0x00;
+			i.ip->v4.packet_length	= htons(wire_len - icmp_hdr_len);
+			i.ip->v4.identification	= htons(0xFFFF);
+			i.ip->v4.flags		= 0x40; /* BIT 1 set - means don't fragment */
+			i.ip->v4.fragment	= htons(0x0000);
+			i.ip->v4.ttl		= 0xFF;
+			i.ip->v4.protocol	= icmp_protocol;
+			i.ip->v4.hdr_checksum	= htons(0x0000);
+			i.ip->v4.src_addr	= dest_in->sin_addr.s_addr;
+			i.ip->v4.dest_addr	= src_in->sin_addr.s_addr;
+
 			buf += SWRAP_PACKET_IP_V4_SIZE;
 
 			src_port = dest_in->sin_port;
@@ -2629,14 +2638,15 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 			buf += SWRAP_PACKET_PAYLOAD_ICMP6_SIZE;
 
 			/* set the ip header in the ICMP payload */
-			ip = (union swrap_packet_ip *)(void *)buf;
-			ip->v6.ver_prio		= 0x60; /* version 4 and 5 * 32 bit words */
-			ip->v6.flow_label_high	= 0x00;
-			ip->v6.flow_label_low	= 0x0000;
-			ip->v6.payload_length	= htons(wire_len - icmp_truncate_len); /* TODO */
-			ip->v6.next_header	= protocol;
-			memcpy(ip->v6.src_addr, dest_in6->sin6_addr.s6_addr, 16);
-			memcpy(ip->v6.dest_addr, src_in6->sin6_addr.s6_addr, 16);
+			i.ptr = buf;
+			i.ip->v6.ver_prio		= 0x60; /* version 4 and 5 * 32 bit words */
+			i.ip->v6.flow_label_high	= 0x00;
+			i.ip->v6.flow_label_low	= 0x0000;
+			i.ip->v6.payload_length	= htons(wire_len - icmp_truncate_len); /* TODO */
+			i.ip->v6.next_header	= protocol;
+			memcpy(i.ip->v6.src_addr, dest_in6->sin6_addr.s6_addr, 16);
+			memcpy(i.ip->v6.dest_addr, src_in6->sin6_addr.s6_addr, 16);
+
 			buf += SWRAP_PACKET_IP_V6_SIZE;
 
 			src_port = dest_in6->sin6_port;
