@@ -886,7 +886,7 @@ int main(int argc, char **argv)
                                 "[-D] [--pid pidfile]\n"
                                 "-t makes the server listen on TCP\n"
                                 "-u makes the server listen on UDP\n"
-                                "-D tells the server to become a deamon and " \
+                                "-D tells the server to become a daemon and " \
                                 "write a PIDfile\n"
                                 "The default port is 7, the default PIDfile is " \
                                 "echo_srv.pid in the current directory\n",
