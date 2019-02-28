@@ -44,7 +44,7 @@ socket_wrapper aims to help client/server software development teams willing to 
 .sp -1
 .IP \(bu 2.3
 .\}
-Redirects all network communication to happen over unix sockets\&.
+Redirects all network communication to happen over Unix sockets\&.
 .RE
 .sp
 .RS 4
@@ -66,13 +66,13 @@ Support for IPv4 and IPv6 socket and addressing emulation\&.
 .sp -1
 .IP \(bu 2.3
 .\}
-Ablility to capture network traffic in pcap format\&.
+Ability to capture network traffic in pcap format\&.
 .RE
 .SH "ENVIRONMENT VARIABLES"
 .PP
 \fBSOCKET_WRAPPER_DIR\fR
 .RS 4
-The user defines a directory where to put all the unix sockets using the envionment variable "SOCKET_WRAPPER_DIR=/path/to/socket_dir"\&. When a server opens a port or a client wants to connect, socket_wrapper will translate IP addresses to a special socket_wrapper name and look for the relevant unix socket in the SOCKET_WRAPPER_DIR\&.
+The user defines a directory where to put all the unix sockets using the environment variable "SOCKET_WRAPPER_DIR=/path/to/socket_dir"\&. When a server opens a port or a client wants to connect, socket_wrapper will translate IP addresses to a special socket_wrapper name and look for the relevant Unix socket in the SOCKET_WRAPPER_DIR\&.
 .RE
 .PP
 \fBSOCKET_WRAPPER_DEFAULT_IFACE\fR
