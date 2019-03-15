@@ -2572,6 +2572,11 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 	i.ptr = buf;
 	switch (src->sa_family) {
 	case AF_INET:
+		if (src_in == NULL || dest_in == NULL) {
+			SAFE_FREE(base);
+			return NULL;
+		}
+
 		i.ip->v4.ver_hdrlen	= 0x45; /* version 4 and 5 * 32 bit words */
 		i.ip->v4.tos		= 0x00;
 		i.ip->v4.packet_length	= htons(wire_len - icmp_truncate_len);
@@ -2587,6 +2592,11 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 		break;
 #ifdef HAVE_IPV6
 	case AF_INET6:
+		if (src_in6 == NULL || dest_in6 == NULL) {
+			SAFE_FREE(base);
+			return NULL;
+		}
+
 		i.ip->v6.ver_prio		= 0x60; /* version 4 and 5 * 32 bit words */
 		i.ip->v6.flow_label_high	= 0x00;
 		i.ip->v6.flow_label_low	= 0x0000;
