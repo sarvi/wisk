@@ -2539,7 +2539,6 @@ static uint8_t *swrap_pcap_packet_init(struct timeval *tval,
 		if (wire_len > 64 ) {
 			icmp_truncate_len = wire_len - 64;
 		}
-		wire_hdr_len += icmp_hdr_len;
 		wire_len += icmp_hdr_len;
 	}
 
