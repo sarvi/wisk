@@ -5910,6 +5910,7 @@ static ssize_t swrap_sendmsg(int s, const struct msghdr *omsg, int flags)
 
 		swrap_dir = socket_wrapper_dir();
 		if (swrap_dir == NULL) {
+			free(buf);
 			return -1;
 		}
 
