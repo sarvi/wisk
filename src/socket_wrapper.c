@@ -1288,6 +1288,7 @@ static char *socket_wrapper_dir(void)
 	char *s = getenv("SOCKET_WRAPPER_DIR");
 
 	if (s == NULL) {
+		SWRAP_LOG(SWRAP_LOG_WARN, "SOCKET_WRAPPER_DIR not set\n");
 		return NULL;
 	}
 
