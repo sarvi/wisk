@@ -1819,6 +1819,10 @@ static int convert_in_un_remote(struct socket_info *si, const struct sockaddr *i
 	}
 
 	swrap_dir = socket_wrapper_dir();
+	if (swrap_dir == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	if (is_bcast) {
 		snprintf(un->sun_path, sizeof(un->sun_path),
@@ -1989,6 +1993,10 @@ static int convert_in_un_alloc(struct socket_info *si, const struct sockaddr *in
 	}
 
 	swrap_dir = socket_wrapper_dir();
+	if (swrap_dir == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
 
 	if (prt == 0) {
 		/* handle auto-allocation of ephemeral ports */
@@ -3583,6 +3591,11 @@ static int swrap_auto_bind(int fd, struct socket_info *si, int family)
 	}
 
 	swrap_dir = socket_wrapper_dir();
+	if (swrap_dir == NULL) {
+		errno = EINVAL;
+		ret = -1;
+		goto done;
+	}
 
 	for (i = 0; i < SOCKET_MAX_SOCKETS; i++) {
 		port = autobind_start + i;
@@ -5388,6 +5401,9 @@ static ssize_t swrap_sendto(int s, const void *buf, size_t len, int flags,
 		type = SOCKET_TYPE_CHAR_UDP;
 
 		swrap_dir = socket_wrapper_dir();
+		if (swrap_dir == NULL) {
+			return -1;
+		}
 
 		for(iface=0; iface <= MAX_WRAPPED_INTERFACES; iface++) {
 			snprintf(un_addr.sa.un.sun_path,
@@ -5893,6 +5909,9 @@ static ssize_t swrap_sendmsg(int s, const struct msghdr *omsg, int flags)
 		type = SOCKET_TYPE_CHAR_UDP;
 
 		swrap_dir = socket_wrapper_dir();
+		if (swrap_dir == NULL) {
+			return -1;
+		}
 
 		for(iface=0; iface <= MAX_WRAPPED_INTERFACES; iface++) {
 			snprintf(un_addr.sun_path, sizeof(un_addr.sun_path), "%s/"SOCKET_FORMAT,
