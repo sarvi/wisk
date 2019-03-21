@@ -1,6 +1,10 @@
 ChangeLog
 ==========
 
+version 1.2.3 (released 2019-03-21)
+  * Fixed missing NULL check for socket_wrapper_dir()
+  * Fixes building in Samba source tree
+
 version 1.2.2 (released 2019-03-21)
   * Added environment variable to disable deep binding
   * Fixed installation of socket_wrapper
