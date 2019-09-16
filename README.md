@@ -1,24 +1,22 @@
-SOCKET_WRAPPER
-==============
+Filesystem Tracker
+===================
 
-This is a library passing all socket communications through unix sockets.
+This is a library monitors and tracks all filesystem accesses.
 
 DESCRIPTION
 -----------
 
 More details can be found in the manpage:
 
-    man -l ./doc/socket_wrapper.1
+    man -l ./doc/fileystsem_tracker.1
 
 or the raw text version:
 
-    less ./doc/socket_wrapper.1.txt
+    less ./doc/fileystsem_tracker.1.txt
 
 For installation instructions please take a look at the README.install file.
 
 MAILINGLIST
 -----------
 
-As the mailing list samba-technical is used and can be found here:
 
-* https://lists.samba.org/mailman/listinfo/samba-technical

@@ -1,11 +1,7 @@
 /*
  * BSD 3-Clause License
  *
- * Copyright (c) 2005-2008, Jelmer Vernooij <jelmer@samba.org>
- * Copyright (c) 2006-2018, Stefan Metzmacher <metze@samba.org>
- * Copyright (c) 2013-2018, Andreas Schneider <asn@samba.org>
- * Copyright (c) 2014-2017, Michael Adam <obnox@samba.org>
- * Copyright (c) 2016-2018, Anoop C S <anoopcs@redhat.com>
+ * Copyright (c) 2019-2020, Sarvi Shanmugham <sarvi@cisco.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,7 +33,7 @@
  */
 
 /*
-   Socket wrapper library. Passes all socket communication over
+   Filesystem Tracker library. Passes all socket communication over
    unix domain sockets if the environment variable SOCKET_WRAPPER_DIR
    is set.
 */
