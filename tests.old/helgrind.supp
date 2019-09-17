@@ -1,0 +1,11 @@
+# The swrap_bind_symbol_lib* macros have a thread race condition on purpose!
+#
+# As an optimization we do not lock the access. However if the obj is not
+# bound, we lock it with a mutex and reread it again. And binding the symbol is
+# protected.
+{
+   SWRAP_SYMBOL_ACCESS
+   Helgrind:Race
+   fun:libc_*
+   fun:swrap_*
+}

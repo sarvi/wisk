@@ -1,0 +1,2 @@
+
+#define HAVE_GETTIMEOFDAY_TZ_VOID
