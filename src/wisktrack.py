@@ -15,13 +15,10 @@ wisktrack -- A program to do wisktrack client storage and reize automatically
 from __future__ import print_function
 import os
 import sys
-import time
 import uuid
 import threading
 import traceback
 import logging
-import subprocess
-import tempfile
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
 from html2text import html2text
@@ -145,11 +142,11 @@ Example:
     except KeyboardInterrupt:
         # handle keyboard interrupt
         return 0
-    except CmdException, ex:
+    except CmdException as ex:
         print(ex.message)
         print("\nFor Assistance: please open a ticket at http://devxsupport.cisco.com/, BU:DevX Tools, OS:Common Tools(non-OS specific), Tool:WIT")
         return 1
-    except Exception, ex:  # pylint: disable=locally-disabled, broad-except
+    except Exception as ex:  # pylint: disable=locally-disabled, broad-except
         logerror = log.error if init else print
         logdebug = log.debug if init else print
         logdebug(traceback.format_exc())

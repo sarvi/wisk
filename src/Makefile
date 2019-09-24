@@ -23,4 +23,5 @@ wisktrack.o: wisktrack.c
 
 .PHONY: clean 
 clean:
-	rm *.so *.o
+	rm -f *.so *.o
+	make -C ../tests clean

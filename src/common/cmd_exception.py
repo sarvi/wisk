@@ -23,4 +23,4 @@ class CmdSystemException(Exception):
     ''' Raise for cmd specific exception '''
     def __init__(self, message, *args):
         self.message = 'ERROR: ' + message
-        super(CmdUserException, self).__init__(message, *args)
+        super(CmdSystemException, self).__init__(message, *args)

@@ -29,4 +29,4 @@ testall:
 
 .PHONY: clean 
 clean:
-	rm *.testbin *.o
+	rm -f *.testbin *.o

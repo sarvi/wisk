@@ -7,13 +7,7 @@ Created on Dec 21, 2017
 from __future__ import print_function
 
 import os
-import getpass
-import pwd
-import re
-import stat
-import json
 import logging
-from urlparse import urlparse
 from common import env
 
 log = logging.getLogger(__name__)  # pylint: disable=locally-disabled, invalid-name

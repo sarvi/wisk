@@ -55,13 +55,6 @@
 #include <pthread.h>
 #include <uuid/uuid.h>
 
-// Environment Variables
-#define LD_PRELOAD "LD_PRELOAD"
-#define WISK_TRACKER_UUID "WISK_TRACKER_UUID"
-#define WISK_TRACKER_DEBUGLEVEL "WISK_TRACKER_DEBUGLEVEL"
-#define WISK_TRACKER_PIPE "WISK_TRACKER_PIPE"
-#define WISK_TRACKER_DISABLE_DEEPBIND "WISK_TRACKER_DISABLE_DEEPBIND"
-
 enum wisk_dbglvl_e {
 	WISK_LOG_ERROR = 0,
 	WISK_LOG_WARN,
@@ -133,8 +126,25 @@ enum wisk_dbglvl_e {
 #define BUFFER_SIZE 4096
 #define UUID_SIZE 50
 
-#define WISK_VAR_COUNT 4
-static char *wisk_envp[WISK_VAR_COUNT];
+// Environment Variables
+#define LD_PRELOAD "LD_PRELOAD"
+#define WISK_TRACKER_UUID "WISK_TRACKER_UUID"
+#define WISK_TRACKER_DEBUGLEVEL "WISK_TRACKER_DEBUGLEVEL"
+#define WISK_TRACKER_PIPE "WISK_TRACKER_PIPE"
+#define WISK_TRACKER_DISABLE_DEEPBIND "WISK_TRACKER_DISABLE_DEEPBIND"
+
+
+char *wisk_env_vars[] = {
+	LD_PRELOAD,
+	WISK_TRACKER_UUID,
+	WISK_TRACKER_DEBUGLEVEL,
+	WISK_TRACKER_PIPE,
+	WISK_TRACKER_DISABLE_DEEPBIND
+};
+
+#define WISK_ENV_VARCOUNT (sizeof((wisk_env_vars))/sizeof((wisk_env_vars)[0]))
+
+static char *wisk_envp[WISK_ENV_VARCOUNT];
 static char *wisk_env_uuid;
 static int wisk_env_count = 0;
 static int fs_tracker_pipe = -1;
@@ -664,11 +674,8 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	if (fs_tracker_pipe < 0) {
 		WISK_LOG(WISK_LOG_ERROR, "File System Tracker Pipe %s cannot be opened for write\n", fs_tracker_pipe_path);
 	}
-    wisk_env_count=0;
-    wisk_env_add(LD_PRELOAD, &wisk_env_count);
-    wisk_env_add(WISK_TRACKER_PIPE, &wisk_env_count);
-    wisk_env_add(WISK_TRACKER_DEBUGLEVEL, &wisk_env_count);
-    wisk_env_add(WISK_TRACKER_UUID, &wisk_env_count);
+	for(wisk_env_count=0, i=0; i< WISK_ENV_VARCOUNT; i++)
+        wisk_env_add(wisk_env_vars[i], &wisk_env_count);
     for(i=0; i<wisk_env_count; i++) {
 	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%s]", wisk_envp[i]);
     }
@@ -698,7 +705,7 @@ bool fs_tracker_enabled(void)
 	return true;
 }
 
-void wisk_write(const char *fname)
+void wisk_report_write(const char *fname)
 {
     char msgbuffer[BUFFER_SIZE];
     int msglen;
@@ -711,7 +718,7 @@ void wisk_write(const char *fname)
 	}
 }
 
-void wisk_read(const char *fname)
+void wisk_report_read(const char *fname)
 {
     char msgbuffer[BUFFER_SIZE];
     int msglen;
@@ -732,12 +739,12 @@ static FILE *wisk_fopen(const char *name, const char *mode)
 {
     WISK_LOG(WISK_LOG_TRACE, "wisk_fopen(%s, %s)", name, mode);
     if (strlen(mode)==2) {
-        wisk_read(name);
-        wisk_write(name);
+        wisk_report_read(name);
+        wisk_report_write(name);
     } else if ((mode[0] == 'w') || (mode[0] == 'a')) {
-        wisk_write(name);
+        wisk_report_write(name);
     } else {
-        wisk_read(name);
+        wisk_report_read(name);
     }
 	return libc_fopen(name, mode);
 }
@@ -783,14 +790,14 @@ static int wisk_vopen(const char *pathname, int flags, va_list ap)
 
     WISK_LOG(WISK_LOG_TRACE, "wisk_vopen(%s, %d)", pathname, flags);
     if ((flags & O_WRONLY) && (flags & O_RDONLY)) {
-        wisk_read(pathname);
-        wisk_write(pathname);
+        wisk_report_read(pathname);
+        wisk_report_write(pathname);
     } else if (flags & O_WRONLY) {
-        wisk_write(pathname);
+        wisk_report_write(pathname);
     } else if (flags & O_RDONLY) {
-        wisk_read(pathname);
+        wisk_report_read(pathname);
     } else {
-        wisk_read(pathname);
+        wisk_report_read(pathname);
     }
 	ret = libc_vopen(pathname, flags, ap);
 	if (ret != -1) {
@@ -893,15 +900,21 @@ static int envcmp(const char *env, const char *var)
     return (strncmp(env, var, len) == 0 && env[len] == '=');
 }
 
+static int wisk_isenv(const char *env)
+{
+	int i;
+	for(i=0; i< WISK_ENV_VARCOUNT; i++)
+		if (envcmp(env, wisk_env_vars[i]))
+			return true;
+	return false;
+}
+
 static int wisk_getvarcount(char *const envp[])
 {
     int envc, i;
 
     for (i=0, envc=1; envp[i]; i++) {
-      if (envcmp(envp[i], LD_PRELOAD) ||
-          envcmp(envp[i], WISK_TRACKER_PIPE) ||
-          envcmp(envp[i], WISK_TRACKER_DEBUGLEVEL) ||
-          envcmp(envp[i], WISK_TRACKER_UUID)) {
+      if (wisk_isenv(envp[i])) {
           WISK_LOG(WISK_LOG_TRACE, "Skipping Environment %d: %s", i, envp[i]);
           continue;
         }
@@ -922,10 +935,7 @@ static void wisk_loadenv(char *const envp[], char *nenvp[])
     for(envi=0; envi < wisk_env_count; envi++)
         nenvp[envi] = wisk_envp[envi];
     for (i=0; envp[i]; i++) {
-      if (envcmp(envp[i], LD_PRELOAD) ||
-          envcmp(envp[i], WISK_TRACKER_PIPE) ||
-          envcmp(envp[i], WISK_TRACKER_DEBUGLEVEL) ||
-          envcmp(envp[i], WISK_TRACKER_UUID))
+      if (wisk_isenv(envp[i]))
           continue;
       nenvp[envi++] = envp[i];
     }
@@ -936,7 +946,7 @@ static void wisk_loadenv(char *const envp[], char *nenvp[])
     WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
 }
 
-void  wisk_command(const char *pathname, char *const argv[], char *const envp[])
+void  wisk_report_command(const char *pathname, char *const argv[], char *const envp[])
 {
     int i, msglen;
     char msgbuffer[BUFFER_SIZE];
@@ -968,7 +978,7 @@ static int wisk_execve(const char *pathname, char *const argv[], char *const env
 	if (fs_tracker_enabled()) {
         char *nenvp[wisk_getvarcount(envp) + wisk_env_count + 1];
         wisk_loadenv(envp, nenvp);
-        wisk_command(pathname, argv, nenvp);
+        wisk_report_command(pathname, argv, nenvp);
 	    return libc_execve(pathname, argv, nenvp);
     } else
 	    return libc_execve(pathname, argv, envp);

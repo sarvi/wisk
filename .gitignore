@@ -7,3 +7,7 @@ build
 obj*/
 cscope.*
 tags
+*.o
+*.so
+*.bin
+*.testbin

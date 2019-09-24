@@ -22,12 +22,11 @@ import random
 import stat
 import subprocess
 import sys
-import thread
 import threading
 import time
 import uuid
-from ConfigParser import SafeConfigParser, InterpolationMissingOptionError, InterpolationSyntaxError, ParsingError, Error
-from StringIO import StringIO
+from configparser import SafeConfigParser, InterpolationMissingOptionError, InterpolationSyntaxError, ParsingError, Error
+from io import StringIO
 
 SIMPLE_FMT = '%(message)s'
 SIMPLE_FMT_CORR_ID = '%(corr_id)s %(message)s'
@@ -82,7 +81,7 @@ else:
     LATEST_BIN_DIR = os.path.join(LATEST_INSTALL_ROOT, 'bin')
 
 HOST_UNAME = platform.uname()
-UMASK = 022  # Set default umask to file permissions of 0644 and directory permissions of 0755
+UMASK = 0o22  # Set default umask to file permissions of 0644 and directory permissions of 0755
 os.umask(UMASK)
 
 ENVIRONMENT = {
@@ -125,9 +124,9 @@ LOCAL = threading.local()
 def get_current_correlation_id():
     ''' Retrieve operation_id saved to thread '''
     try:
-        return LOCAL.operation_id or ENVIRONMENT.get('uniqueid', None) or '{}.{}'.format(os.getpid(), thread.get_ident())
+        return LOCAL.operation_id or ENVIRONMENT.get('uniqueid', None) or '{}.{}'.format(os.getpid(), threading.get_ident())
     except AttributeError:
-        return ENVIRONMENT.get('uniqueid', None) or '{}.{}'.format(os.getpid(), thread.get_ident())
+        return ENVIRONMENT.get('uniqueid', None) or '{}.{}'.format(os.getpid(), threading.get_ident())
 
 
 class CorrelationIdFilter(logging.Filter):
@@ -174,10 +173,10 @@ def env_siteinfo_update():
         out = out.strip()
         out = [k.decode("utf-8").split(':') for k in out.splitlines()]
         servinfo = {k.strip(): v.strip() for k, v in out}
-    # servinfo = {k: v for k, v in servinfo.iteritems() if k not in ENVIRONMENT}
+    # servinfo = {k: v for k, v in servinfo.items() if k not in ENVIRONMENT}
     ENVIRONMENT.update(servinfo)
     LUMENS_DATA['metadata'].update(servinfo)
-    env_update = {k.replace(ENV_VARIABLE_PREFIX, ''): v for k, v in os.environ.iteritems() if k.startswith(ENV_VARIABLE_PREFIX)}
+    env_update = {k.replace(ENV_VARIABLE_PREFIX, ''): v for k, v in os.environ.items() if k.startswith(ENV_VARIABLE_PREFIX)}
     ENVIRONMENT.update(env_update)
     ENVIRONMENT['Host Name'] = ENVIRONMENT['Host Name'].split('.')[0]
     return servinfo
@@ -187,7 +186,7 @@ def get_unique_id():
     ''' generate a short unique id for client '''
 #     return str(uuid.uuid4())
     intstr = hex(int(time.time() * 10000))[2:] + hex(random.randrange(0, 0xFFFF))[2:]
-    return base64.b64encode(intstr, 'AB')[:-2]
+    return base64.b64encode(intstr.encode(), 'AB'.encode())[:-2].decode('utf-8')
 
 
 def config_read(cfg_search, doclientcfg=False):  # pylint: disable=locally-disabled, too-many-statements, too-many-branches, too-many-locals
@@ -275,13 +274,13 @@ def config_read(cfg_search, doclientcfg=False):  # pylint: disable=locally-disab
             cfgfiles.extend(clientcfg)
         else:
             servercfgfiles = [os.path.join(get_tool_dir(), 'wisk_server.cfg')]
-            if config.get('common', 'install_type', None) != 'local':
+            if config.get('common', 'install_type', vars={'install_type': None}) != 'local':
                 servercfgfiles.append(os.path.join(get_tool_dir(), 'wisk_server_%s.cfg' % config.get('common', 'install_type', None)))
             servercfgfiles = [os.path.expanduser(i) for i in servercfgfiles]
             cfgfiles.extend(servercfgfiles)
             found.extend(config.read(servercfgfiles))
 
-        if config.get('common', 'install_type', None) == 'local':
+        if config.get('common', 'install_type', vars={'install_type': None}) == 'local':
             localcfgfiles = [os.path.join(get_tool_dir(), 'wisk_local.cfg'),
                              os.path.join(get_tool_dir(), 'wisk_local_%(instance_name)s.cfg')]
             localcfgfiles = [os.path.expanduser(i) for i in localcfgfiles]
@@ -302,7 +301,7 @@ def config_read(cfg_search, doclientcfg=False):  # pylint: disable=locally-disab
 
     except (ParsingError, OSError) as ex:
         sys.exit('Error reading/parsing Confg files %s : %s' % (cfgfiles, ex))
-    ENVIRONMENT['install_type'] = config.get('common', 'install_type', None)
+    ENVIRONMENT['install_type'] = config.get('common', 'install_type', vars={'install_type': None})
     not_found = set(cfgfiles) - set(found)
     ENVIRONMENT['cfg_found'] = found
     ENVIRONMENT['cfg_notfound'] = not_found
@@ -534,7 +533,7 @@ def logging_setup(verbosity, corridfilter=None, onlyerrorlogs=False):  # pylint:
             os.chmod(dname,
                      os.stat(dname).st_mode |
                      stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH)
-        except OSError, e:
+        except OSError as e:
             sys.exit('Error creating log directory: %s' % e)
     logger = logging.getLogger()
     logger.setLevel(logging.NOTSET)
@@ -581,7 +580,7 @@ def logging_setup(verbosity, corridfilter=None, onlyerrorlogs=False):  # pylint:
         ENVIRONMENT['fileloglevel'] = logging.DEBUG if fileloglevel == 'debug' else logging.INFO
         try:
             ENVIRONMENT['fileloghandler'] = FileHandler(ENVIRONMENT['logfile'])
-        except OSError, e:
+        except OSError as e:
             sys.exit('Error setting up file logging handler: %s, %s' % (ENVIRONMENT['logfile'], e))
         ENVIRONMENT['fileloghandler'].addFilter(corridfilter)
         logger.addHandler(ENVIRONMENT['fileloghandler'])
@@ -678,19 +677,19 @@ def exit_clean(err):
             try:
                 # Try to create hardlink
                 os.link(logfile, tlogfile)
-            except OSError, e:
+            except OSError as e:
                 log.warning('Error with hard link of %s to %s: %s', logfile, tlogfile, e)
                 try:
                     # Try to create symlink
                     os.symlink(logfile, tlogfile)
-                except OSError, e:
+                except OSError as e:
                     log.error('Error creating symlink of %s to %s: %s', logfile, tlogfile, e)
                     return err
         try:
             os.chmod(tlogfile,
                      os.stat(tlogfile).st_mode |
                      stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH)
-        except OSError, e:
+        except OSError as e:
             log.error('Error updating permissions on log files: %s', e)
         logmsg('Detailed Logs at %s' % tlogfile)
     else:
@@ -711,7 +710,7 @@ def get_relversion(client):
         prefix = 'WISK_CLIENT' if client else 'WISK_SERVER'
         ENVIRONMENT['rel-version'] = subprocess.check_output(
             ['git', 'describe', '--tags', '--match', '%s_[--9A-Z]*' % prefix, '--always', '--abbrev=4', 'HEAD'],
-            stderr=subprocess.STDOUT).strip().replace('_', '.')
+            stderr=subprocess.STDOUT).decode('utf-8').strip().replace('_', '.')
     except subprocess.CalledProcessError as ex:
         log.debug('Could not get servinfo for client: %s', ex)
         ENVIRONMENT['rel-version'] = 'unknown-development-version'
@@ -782,7 +781,7 @@ def workspace_guid():
     ws_uid = ws_stat.st_uid
     ws_owner = pwd.getpwuid(ws_uid).pw_name
 
-    slug = hashlib.sha1(ws_id).hexdigest()[:10]
+    slug = hashlib.sha1(ws_id.encode('utf-8')).hexdigest()[:10]
     guid = '%s_%s' % (ws_owner, slug)
 
     return guid

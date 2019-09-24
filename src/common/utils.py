@@ -116,7 +116,7 @@ def lumens_wrap(python_callable):
                 send_2_lumens.generate_message_to_kafka(message_object, env.LUMENS_DATA)
             except Exception as kafkaex:
                 log.debug('Lumens Kafka Exception: %s' % kafkaex)
-            raise t, v, tb
+            raise
         try:
             send_2_lumens.generate_message_to_kafka(message_object, env.LUMENS_DATA)
         except Exception as kafkaex:
@@ -218,7 +218,7 @@ class Shell(object):  # pylint: disable=locally-disabled, too-many-instance-attr
         cmdcxt, argcxt = self._stack[-1]
 #        cmd = [pipes.quote(i) for i in cmdcxt + self._cmds + list(args)]
         cmd = [i for i in cmdcxt + self._cmds + list(args)]
-        for k, v in kwargs.iteritems():
+        for k, v in kwargs.items():
             if k.startswith('_'):
                 continue
             cmd.append(('-%s' % k) if len(k) == 1 else ('--%s' % k))
