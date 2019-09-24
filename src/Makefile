@@ -7,7 +7,7 @@ INSTALLDIR = ../binaries
 all: libwisktrack.so runtests
 
 .PHONY: install
-install: libfilesystem_tracker.so
+install: libwisktrack.so
 	mkdir -p $(INSTALLDIR)
 	cp -p $^ $(INSTALLDIR)
 
