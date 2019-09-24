@@ -12,7 +12,7 @@ int main(void)
 {
     FILE *f;
     char *args[] = {"/bin/cat", "test_execve1.c",NULL};
-    char *envp[] = {"LD_PRELOAD=/nobackup/sarvi/filesystem_tracker/src/libfilesystem_tracker.so", NULL};
+    char *envp[] = {"LD_PRELOAD=/nobackup/sarvi/filesystem_tracker/src/libwisktrack.so", NULL};
 
     printf("\nTest Case: test_execve1\n");
     printf("Test Case PID: %u\n", getpid());
@@ -23,7 +23,7 @@ int main(void)
     f = fopen("/tmp/testfile1", "w");
     fprintf(f, MSG);
     fclose(f);
-    int ret = system("export WISK_TRACKER_DEBUGLEVEL=3; export WISK_TRACKER_UUID=casaASAS; export WISK_TRACKER_PIPE=/tmp/wisk_tracker.pipe; export LD_PRELOAD=/nobackup/sarvi/filesystem_tracker/src/libfilesystem_tracker.so; /bin/cat test_execve1.c");
+    int ret = system("export WISK_TRACKER_DEBUGLEVEL=3; export WISK_TRACKER_UUID=casaASAS; export WISK_TRACKER_PIPE=/tmp/wisk_tracker.pipe; export LD_PRELOAD=/nobackup/sarvi/filesystem_tracker/src/libwisktrack.so; /bin/cat test_execve1.c");
 
     printf("\nsub command complete\n");
     return 0;

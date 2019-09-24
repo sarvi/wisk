@@ -33,7 +33,7 @@
  */
 
 /*
-   Filesystem Tracker library. Tracks all filesystem operations and logs it 
+   WISK Filesystem Tracker library. Tracks all filesystem operations and logs it 
    to named pipe, so that a listener to collect create a dependency tree
 */
 

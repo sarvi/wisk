@@ -4,7 +4,7 @@ CXX=/router/bin/gcc.c4.9.3-p0
 INSTALLDIR = ../binaries
 
 .PHONY: all
-all: libfilesystem_tracker.so runtests
+all: libwisktrack.so runtests
 
 .PHONY: install
 install: libfilesystem_tracker.so
@@ -15,10 +15,10 @@ install: libfilesystem_tracker.so
 runtests: install
 	make -C ../tests
 
-libfilesystem_tracker.so: filesystem_tracker.o
+libwisktrack.so: wisktrack.o
 	$(CXX) -shared -fPIC -pthread -luuid $(LDFLAGS) -ldl -o $@ $^
 
-filesystem_tracker.o: filesystem_tracker.c
+wisktrack.o: wisktrack.c
 	$(CXX) -fPIC -pthread -c -o $@ $^
 
 .PHONY: clean 

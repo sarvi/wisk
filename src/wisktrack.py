@@ -48,7 +48,7 @@ class TrackedRunner(object):
     def __init__(self, args):
         self.args = args
         self.cmdenv = {
-            'LD_PRELOAD': os.path.join(env.INSTALL_PKG_ROOT, 'libfilesystem_tracker.so'),
+            'LD_PRELOAD': os.path.join(env.INSTALL_PKG_ROOT, 'libwisktrack.so'),
             'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
             'WISK_TRACKER_UUID': str(uuid.uuid4()),
             'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose + 1))}

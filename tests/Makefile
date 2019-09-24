@@ -12,7 +12,7 @@ TRACKER_PIPE = /tmp/tracker.pipe
 .PHONY: all
 all: $(PROGS)
 #	${SCRIPTDIR}/wisktrack -vv ./test_open1.testbin
-#	FS_TRACKER_PIPE=$TRACKER_PIPE LD_PRELOAD=../binaries/libfilesystem_tracker.so ./hello_world.testbin
+#	FS_TRACKER_PIPE=$TRACKER_PIPE LD_PRELOAD=../binaries/libwisktrack.so ./hello_world.testbin
 
 .PHONY: testall
 testall:
