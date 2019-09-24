@@ -54,11 +54,18 @@
 #include <unistd.h>
 #include <pthread.h>
 
-enum fstrack_dbglvl_e {
-	FSTRACK_LOG_ERROR = 0,
-	FSTRACK_LOG_WARN,
-	FSTRACK_LOG_DEBUG,
-	FSTRACK_LOG_TRACE
+// Environment Variables
+#define LD_PRELOAD "LD_PRELOAD"
+#define WISK_TRACKER_UUID "WISK_TRACKER_UUID"
+#define WISK_TRACKER_DEBUGLEVEL "WISK_TRACKER_DEBUGLEVEL"
+#define WISK_TRACKER_PIPE "WISK_TRACKER_PIPE"
+#define WISK_TRACKER_DISABLE_DEEPBIND "WISK_TRACKER_DISABLE_DEEPBIND"
+
+enum wisk_dbglvl_e {
+	WISK_LOG_ERROR = 0,
+	WISK_LOG_WARN,
+	WISK_LOG_DEBUG,
+	WISK_LOG_TRACE
 };
 
 /* GCC have printf type attribute check. */
@@ -81,9 +88,9 @@ enum fstrack_dbglvl_e {
 #endif
 
 #ifdef HAVE_GCC_THREAD_LOCAL_STORAGE
-# define FSTRACK_THREAD __thread
+# define WISK_THREAD __thread
 #else
-# define FSTRACK_THREAD
+# define WISK_THREAD
 #endif
 
 #ifndef MIN
@@ -116,76 +123,34 @@ enum fstrack_dbglvl_e {
 #define UNUSED(x) (void)(x)
 
 /* Add new global locks here please */
-# define FSTRACK_LOCK_ALL \
-	fstrack_mutex_lock(&libc_symbol_binding_mutex); \
+# define WISK_LOCK_ALL \
+	wisk_mutex_lock(&libc_symbol_binding_mutex); \
 
-# define FSTRACK_UNLOCK_ALL \
-	fstrack_mutex_unlock(&libc_symbol_binding_mutex); \
+# define WISK_UNLOCK_ALL \
+	wisk_mutex_unlock(&libc_symbol_binding_mutex); \
 
-#define FS_INFO_CONTAINER(si) \
-	(struct fs_info_container *)(si)
+#define BUFFER_SIZE 4096
+#define UUID_SIZE 50
 
-#define FSTRACK_LOCK_SI(si) do { \
-	struct fs_info_container *sic = FS_INFO_CONTAINER(si); \
-	fstrack_mutex_lock(&sic->meta.mutex); \
-} while(0)
-
-#define FSTRACK_UNLOCK_SI(si) do { \
-	struct fs_info_container *sic = FS_INFO_CONTAINER(si); \
-	fstrack_mutex_unlock(&sic->meta.mutex); \
-} while(0)
-
-int first_free;
-
-struct fs_info
-{
-    FILE *tracker_socket;
-};
-
-struct fs_info_meta
-{
-	unsigned int refcount;
-	int next_free;
-	pthread_mutex_t mutex;
-};
-
-struct fs_info_container
-{
-	struct fs_info info;
-	struct fs_info_meta meta;
-};
-
-static struct fs_info_container *sockets;
-
-static size_t fs_info_max = 0;
+#define WISK_VAR_COUNT 4
+static char *wisk_envp[WISK_VAR_COUNT];
+static int wisk_env_count = 0;
+static int fs_tracker_pipe = -1;
+static char fs_tracker_uuid[UUID_SIZE];
+static char writebuffer[BUFFER_SIZE];
 
 /* Mutex to synchronize access to global libc.symbols */
 static pthread_mutex_t libc_symbol_binding_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-/* Mutex for syncronizing port selection during fstrack_auto_bind() */
-static pthread_mutex_t autobind_start_mutex;
-
 /* Mutex to guard the initialization of array of fs_info structures */
-static pthread_mutex_t sockets_mutex;
-
-/* Mutex to guard the socket reset in fstrack_close() and fstrack_remove_stale() */
-static pthread_mutex_t socket_reset_mutex;
-
-/* Mutex to synchronize access to first free index in fs_info array */
-static pthread_mutex_t first_free_mutex;
-
-/* Mutex to synchronize access to packet capture dump file */
-static pthread_mutex_t pcap_dump_mutex;
-
-/* Mutex for synchronizing mtu value fetch*/
-static pthread_mutex_t mtu_update_mutex;
+static pthread_mutex_t fs_tracker_pipe_mutex;
 
 /* Function prototypes */
 
 bool fs_tracker_enabled(void);
 
-void fstrack_constructor(void) CONSTRUCTOR_ATTRIBUTE;
-void fstrack_destructor(void) DESTRUCTOR_ATTRIBUTE;
+void wisk_constructor(void) CONSTRUCTOR_ATTRIBUTE;
+void wisk_destructor(void) DESTRUCTOR_ATTRIBUTE;
 
 #ifndef HAVE_GETPROGNAME
 static const char *getprogname(void)
@@ -195,15 +160,15 @@ static const char *getprogname(void)
 #elif defined(HAVE_GETEXECNAME)
 	return getexecname();
 #else
-	return NULL;
+	return program_invocation_short_name;
 #endif /* HAVE_PROGRAM_INVOCATION_SHORT_NAME */
 }
 #endif /* HAVE_GETPROGNAME */
 
-static void fstrack_log(enum fstrack_dbglvl_e dbglvl, const char *func, const char *format, ...) PRINTF_ATTRIBUTE(3, 4);
-# define FSTRACK_LOG(dbglvl, ...) fstrack_log((dbglvl), __func__, __VA_ARGS__)
+static void wisk_log(enum wisk_dbglvl_e dbglvl, const char *func, const char *format, ...) PRINTF_ATTRIBUTE(3, 4);
+# define WISK_LOG(dbglvl, ...) wisk_log((dbglvl), __func__, __VA_ARGS__)
 
-static void fstrack_log(enum fstrack_dbglvl_e dbglvl,
+static void wisk_log(enum wisk_dbglvl_e dbglvl,
 		      const char *func,
 		      const char *format, ...)
 {
@@ -211,10 +176,10 @@ static void fstrack_log(enum fstrack_dbglvl_e dbglvl,
 	va_list va;
 	const char *d;
 	unsigned int lvl = 0;
-	const char *prefix = "SWRAP";
+	const char *prefix = "WISK";
 	const char *progname = getprogname();
 
-	d = getenv("FS_TRACKER_DEBUGLEVEL");
+	d = getenv(WISK_TRACKER_DEBUGLEVEL);
 	if (d != NULL) {
 		lvl = atoi(d);
 	}
@@ -228,17 +193,17 @@ static void fstrack_log(enum fstrack_dbglvl_e dbglvl,
 	va_end(va);
 
 	switch (dbglvl) {
-		case FSTRACK_LOG_ERROR:
-			prefix = "FSTRACK_ERROR";
+		case WISK_LOG_ERROR:
+			prefix = "WISK_ERROR";
 			break;
-		case FSTRACK_LOG_WARN:
-			prefix = "FSTRACK_WARN";
+		case WISK_LOG_WARN:
+			prefix = "WISK_WARN";
 			break;
-		case FSTRACK_LOG_DEBUG:
-			prefix = "FSTRACK_DEBUG";
+		case WISK_LOG_DEBUG:
+			prefix = "WISK_DEBUG";
 			break;
-		case FSTRACK_LOG_TRACE:
-			prefix = "FSTRACK_TRACE";
+		case WISK_LOG_TRACE:
+			prefix = "WISK_TRACE";
 			break;
 	}
 
@@ -256,14 +221,11 @@ static void fstrack_log(enum fstrack_dbglvl_e dbglvl,
 }
 
 /*********************************************************
- * SWRAP LOADING LIBC FUNCTIONS
+ * WISK LOADING LIBC FUNCTIONS
  *********************************************************/
 
 #include <dlfcn.h>
 
-typedef int (*__libc_close)(int fd);
-typedef int (*__libc_dup)(int fd);
-typedef int (*__libc_dup2)(int oldfd, int newfd);
 typedef int (*__libc_fcntl)(int fd, int cmd, ...);
 typedef FILE *(*__libc_fopen)(const char *name, const char *mode);
 #ifdef HAVE_FOPEN64
@@ -274,57 +236,59 @@ typedef int (*__libc_open)(const char *pathname, int flags, ...);
 typedef int (*__libc_open64)(const char *pathname, int flags, ...);
 #endif /* HAVE_OPEN64 */
 typedef int (*__libc_openat)(int dirfd, const char *path, int flags, ...);
+typedef int (*__libc_execve)(const char *pathname, char *const argv[], char *const envp[]);
+typedef int (*__libc_execveat)(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags);
 
-#define FSTRACK_SYMBOL_ENTRY(i) \
+#define WISK_SYMBOL_ENTRY(i) \
 	union { \
 		__libc_##i f; \
 		void *obj; \
 	} _libc_##i
 
-struct fstrack_libc_symbols {
-	FSTRACK_SYMBOL_ENTRY(dup);
-	FSTRACK_SYMBOL_ENTRY(dup2);
-	FSTRACK_SYMBOL_ENTRY(fcntl);
-	FSTRACK_SYMBOL_ENTRY(fopen);
+struct wisk_libc_symbols {
+	WISK_SYMBOL_ENTRY(fcntl);
+	WISK_SYMBOL_ENTRY(fopen);
 #ifdef HAVE_FOPEN64
-	FSTRACK_SYMBOL_ENTRY(fopen64);
+	WISK_SYMBOL_ENTRY(fopen64);
 #endif
-	FSTRACK_SYMBOL_ENTRY(open);
+	WISK_SYMBOL_ENTRY(open);
 #ifdef HAVE_OPEN64
-	FSTRACK_SYMBOL_ENTRY(open64);
+	WISK_SYMBOL_ENTRY(open64);
 #endif
-	FSTRACK_SYMBOL_ENTRY(openat);
+	WISK_SYMBOL_ENTRY(openat);
+ 	WISK_SYMBOL_ENTRY(execve);
+ 	WISK_SYMBOL_ENTRY(execveat);
 };
 
-struct swrap {
+struct wisk {
 	struct {
 		void *handle;
 		void *socket_handle;
-		struct fstrack_libc_symbols symbols;
+		struct wisk_libc_symbols symbols;
 	} libc;
 };
 
-static struct swrap swrap;
+static struct wisk wisk;
 
 /* prototypes */
-static char *fs_tracker_pipe(void);
+static char *fs_tracker_pipe_getpath(void);
 
 #define LIBC_NAME "libc.so"
 
-enum fstrack_lib {
-    FSTRACK_LIBC,
-    FSTRACK_LIBNSL,
-    FSTRACK_LIBSOCKET,
+enum wisk_lib {
+    WISK_LIBC,
+    WISK_LIBNSL,
+    WISK_LIBSOCKET,
 };
 
-static const char *fstrack_str_lib(enum fstrack_lib lib)
+static const char *wisk_str_lib(enum wisk_lib lib)
 {
 	switch (lib) {
-	case FSTRACK_LIBC:
+	case WISK_LIBC:
 		return "libc";
-	case FSTRACK_LIBNSL:
+	case WISK_LIBNSL:
 		return "libnsl";
-	case FSTRACK_LIBSOCKET:
+	case WISK_LIBSOCKET:
 		return "libsocket";
 	}
 
@@ -332,15 +296,15 @@ static const char *fstrack_str_lib(enum fstrack_lib lib)
 	return "unknown";
 }
 
-static void *fstrack_load_lib_handle(enum fstrack_lib lib)
+static void *wisk_load_lib_handle(enum wisk_lib lib)
 {
 	int flags = RTLD_LAZY;
 	void *handle = NULL;
 	int i;
 
 #ifdef RTLD_DEEPBIND
-	const char *env_preload = getenv("LD_PRELOAD");
-	const char *env_deepbind = getenv("FS_TRACKER_DISABLE_DEEPBIND");
+	const char *env_preload = getenv(LD_PRELOAD);
+	const char *env_deepbind = getenv(WISK_TRACKER_DISABLE_DEEPBIND);
 	bool enable_deepbind = true;
 
 	/* Don't do a deepbind if we run with libasan */
@@ -361,10 +325,10 @@ static void *fstrack_load_lib_handle(enum fstrack_lib lib)
 #endif
 
 	switch (lib) {
-	case FSTRACK_LIBNSL:
-	case FSTRACK_LIBSOCKET:
+	case WISK_LIBNSL:
+	case WISK_LIBSOCKET:
 #ifdef HAVE_LIBSOCKET
-		handle = swrap.libc.socket_handle;
+		handle = wisk.libc.socket_handle;
 		if (handle == NULL) {
 			for (i = 10; i >= 0; i--) {
 				char soname[256] = {0};
@@ -376,17 +340,17 @@ static void *fstrack_load_lib_handle(enum fstrack_lib lib)
 				}
 			}
 
-			swrap.libc.socket_handle = handle;
+			wisk.libc.socket_handle = handle;
 		}
 		break;
 #endif
-	case FSTRACK_LIBC:
-		handle = swrap.libc.handle;
+	case WISK_LIBC:
+		handle = wisk.libc.handle;
 #ifdef LIBC_SO
 		if (handle == NULL) {
 			handle = dlopen(LIBC_SO, flags);
 
-			swrap.libc.handle = handle;
+			wisk.libc.handle = handle;
 		}
 #endif
 		if (handle == NULL) {
@@ -400,16 +364,16 @@ static void *fstrack_load_lib_handle(enum fstrack_lib lib)
 				}
 			}
 
-			swrap.libc.handle = handle;
+			wisk.libc.handle = handle;
 		}
 		break;
 	}
 
 	if (handle == NULL) {
 #ifdef RTLD_NEXT
-		handle = swrap.libc.handle = swrap.libc.socket_handle = RTLD_NEXT;
+		handle = wisk.libc.handle = wisk.libc.socket_handle = RTLD_NEXT;
 #else
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
+		WISK_LOG(WISK_LOG_ERROR,
 			  "Failed to dlopen library: %s\n",
 			  dlerror());
 		exit(-1);
@@ -419,48 +383,48 @@ static void *fstrack_load_lib_handle(enum fstrack_lib lib)
 	return handle;
 }
 
-static void *_fstrack_bind_symbol(enum fstrack_lib lib, const char *fn_name)
+static void *_wisk_bind_symbol(enum wisk_lib lib, const char *fn_name)
 {
 	void *handle;
 	void *func;
 
-	handle = fstrack_load_lib_handle(lib);
+	handle = wisk_load_lib_handle(lib);
 
 	func = dlsym(handle, fn_name);
 	if (func == NULL) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
+		WISK_LOG(WISK_LOG_ERROR,
 			  "Failed to find %s: %s\n",
 			  fn_name,
 			  dlerror());
 		exit(-1);
 	}
 
-	FSTRACK_LOG(FSTRACK_LOG_TRACE,
+	WISK_LOG(WISK_LOG_TRACE,
 		  "Loaded %s from %s",
 		  fn_name,
-		  fstrack_str_lib(lib));
+		  wisk_str_lib(lib));
 
 	return func;
 }
 
-static void fstrack_mutex_lock(pthread_mutex_t *mutex)
+static void wisk_mutex_lock(pthread_mutex_t *mutex)
 {
 	int ret;
 
 	ret = pthread_mutex_lock(mutex);
 	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR, "Couldn't lock pthread mutex - %s",
+		WISK_LOG(WISK_LOG_ERROR, "Couldn't lock pthread mutex - %s",
 			  strerror(ret));
 	}
 }
 
-static void fstrack_mutex_unlock(pthread_mutex_t *mutex)
+static void wisk_mutex_unlock(pthread_mutex_t *mutex)
 {
 	int ret;
 
 	ret = pthread_mutex_unlock(mutex);
 	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR, "Couldn't unlock pthread mutex - %s",
+		WISK_LOG(WISK_LOG_ERROR, "Couldn't unlock pthread mutex - %s",
 			  strerror(ret));
 	}
 }
@@ -471,34 +435,14 @@ static void fstrack_mutex_unlock(pthread_mutex_t *mutex)
  * This is an optimization to avoid locking each time we check if the symbol is
  * bound.
  */
-#define fstrack_bind_symbol_libc(sym_name) \
-	if (swrap.libc.symbols._libc_##sym_name.obj == NULL) { \
-		fstrack_mutex_lock(&libc_symbol_binding_mutex); \
-		if (swrap.libc.symbols._libc_##sym_name.obj == NULL) { \
-			swrap.libc.symbols._libc_##sym_name.obj = \
-				_fstrack_bind_symbol(FSTRACK_LIBC, #sym_name); \
+#define wisk_bind_symbol_libc(sym_name) \
+	if (wisk.libc.symbols._libc_##sym_name.obj == NULL) { \
+		wisk_mutex_lock(&libc_symbol_binding_mutex); \
+		if (wisk.libc.symbols._libc_##sym_name.obj == NULL) { \
+			wisk.libc.symbols._libc_##sym_name.obj = \
+				_wisk_bind_symbol(WISK_LIBC, #sym_name); \
 		} \
-		fstrack_mutex_unlock(&libc_symbol_binding_mutex); \
-	}
-
-#define fstrack_bind_symbol_libsocket(sym_name) \
-	if (swrap.libc.symbols._libc_##sym_name.obj == NULL) { \
-		fstrack_mutex_lock(&libc_symbol_binding_mutex); \
-		if (swrap.libc.symbols._libc_##sym_name.obj == NULL) { \
-			swrap.libc.symbols._libc_##sym_name.obj = \
-				_fstrack_bind_symbol(FSTRACK_LIBSOCKET, #sym_name); \
-		} \
-		fstrack_mutex_unlock(&libc_symbol_binding_mutex); \
-	}
-
-#define fstrack_bind_symbol_libnsl(sym_name) \
-	if (swrap.libc.symbols._libc_##sym_name.obj == NULL) { \
-		fstrack_mutex_lock(&libc_symbol_binding_mutex); \
-		if (swrap.libc.symbols._libc_##sym_name.obj == NULL) { \
-			swrap.libc.symbols._libc_##sym_name.obj = \
-				_fstrack_bind_symbol(FSTRACK_LIBNSL, #sym_name); \
-		} \
-		fstrack_mutex_unlock(&libc_symbol_binding_mutex); \
+		wisk_mutex_unlock(&libc_symbol_binding_mutex); \
 	}
 
 /****************************************************************************
@@ -512,33 +456,41 @@ static void fstrack_mutex_unlock(pthread_mutex_t *mutex)
  *
  ****************************************************************************/
 
-static int libc_dup(int fd)
+static int libc_execve(const char *pathname, char *const argv[], char *const envp[])
 {
-	fstrack_bind_symbol_libc(dup);
+    int i;
 
-	return swrap.libc.symbols._libc_dup.f(fd);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_execve(%s)", pathname);
+	wisk_bind_symbol_libc(execve);
+
+	return wisk.libc.symbols._libc_execve.f(pathname, argv, envp);
 }
 
-static int libc_dup2(int oldfd, int newfd)
+static int libc_execveat(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags)
 {
-	fstrack_bind_symbol_libc(dup2);
+    int i;
 
-	return swrap.libc.symbols._libc_dup2.f(oldfd, newfd);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_execveat(%s)", pathname);
+	wisk_bind_symbol_libc(execveat);
+
+	return wisk.libc.symbols._libc_execveat.f(dirfd, pathname, argv, envp, flags);
 }
 
 static FILE *libc_fopen(const char *name, const char *mode)
 {
-	fstrack_bind_symbol_libc(fopen);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_fopen(%s, %s)", name, mode);
+	wisk_bind_symbol_libc(fopen);
 
-	return swrap.libc.symbols._libc_fopen.f(name, mode);
+	return wisk.libc.symbols._libc_fopen.f(name, mode);
 }
 
 #ifdef HAVE_FOPEN64
 static FILE *libc_fopen64(const char *name, const char *mode)
 {
-	fstrack_bind_symbol_libc(fopen64);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_fopen64(%s, %s)", name, mode);
+	wisk_bind_symbol_libc(fopen64);
 
-	return swrap.libc.symbols._libc_fopen64.f(name, mode);
+	return wisk.libc.symbols._libc_fopen64.f(name, mode);
 }
 #endif /* HAVE_FOPEN64 */
 
@@ -547,12 +499,13 @@ static int libc_vopen(const char *pathname, int flags, va_list ap)
 	int mode = 0;
 	int fd;
 
-	fstrack_bind_symbol_libc(open);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_vopen: %s", pathname);
+	wisk_bind_symbol_libc(open);
 
 	if (flags & O_CREAT) {
 		mode = va_arg(ap, int);
 	}
-	fd = swrap.libc.symbols._libc_open.f(pathname, flags, (mode_t)mode);
+	fd = wisk.libc.symbols._libc_open.f(pathname, flags, (mode_t)mode);
 
 	return fd;
 }
@@ -562,6 +515,7 @@ static int libc_open(const char *pathname, int flags, ...)
 	va_list ap;
 	int fd;
 
+	WISK_LOG(WISK_LOG_TRACE, "static libc_open: %s", pathname);
 	va_start(ap, flags);
 	fd = libc_vopen(pathname, flags, ap);
 	va_end(ap);
@@ -575,12 +529,13 @@ static int libc_vopen64(const char *pathname, int flags, va_list ap)
 	int mode = 0;
 	int fd;
 
-	fstrack_bind_symbol_libc(open64);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_vopen64(%s, %d)", pathname, flags);
+	wisk_bind_symbol_libc(open64);
 
 	if (flags & O_CREAT) {
 		mode = va_arg(ap, int);
 	}
-	fd = swrap.libc.symbols._libc_open64.f(pathname, flags, (mode_t)mode);
+	fd = wisk.libc.symbols._libc_open64.f(pathname, flags, (mode_t)mode);
 
 	return fd;
 }
@@ -591,12 +546,13 @@ static int libc_vopenat(int dirfd, const char *path, int flags, va_list ap)
 	int mode = 0;
 	int fd;
 
-	fstrack_bind_symbol_libc(openat);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_vopenat(%d, %s, %d)", dirfd, path, flags);
+	wisk_bind_symbol_libc(openat);
 
 	if (flags & O_CREAT) {
 		mode = va_arg(ap, int);
 	}
-	fd = swrap.libc.symbols._libc_openat.f(dirfd,
+	fd = wisk.libc.symbols._libc_openat.f(dirfd,
 					       path,
 					       flags,
 					       (mode_t)mode);
@@ -605,60 +561,43 @@ static int libc_vopenat(int dirfd, const char *path, int flags, va_list ap)
 }
 
 /* DO NOT call this function during library initialization! */
-static void fstrack_bind_symbol_all(void)
+static void wisk_bind_symbol_all(void)
 {
-	fstrack_bind_symbol_libc(dup);
-	fstrack_bind_symbol_libc(dup2);
-	fstrack_bind_symbol_libc(fopen);
+	wisk_bind_symbol_libc(fopen);
 #ifdef HAVE_FOPEN64
-	fstrack_bind_symbol_libc(fopen64);
+	wisk_bind_symbol_libc(fopen64);
 #endif
-	fstrack_bind_symbol_libc(open);
+	wisk_bind_symbol_libc(open);
 #ifdef HAVE_OPEN64
-	fstrack_bind_symbol_libc(open64);
+	wisk_bind_symbol_libc(open64);
 #endif
-	fstrack_bind_symbol_libc(openat);
+	wisk_bind_symbol_libc(openat);
+ 	wisk_bind_symbol_libc(execve);
+ 	wisk_bind_symbol_libc(execveat);
 }
 
 /*********************************************************
  * SWRAP HELPER FUNCTIONS
  *********************************************************/
 
-static void fstrack_inc_refcount(struct fs_info *si)
+static char *fs_tracker_pipe_getpath(void)
 {
-	struct fs_info_container *sic = FS_INFO_CONTAINER(si);
+	char *wisk_pipe_path = NULL;
+	char *s = getenv(WISK_TRACKER_PIPE);
 
-	sic->meta.refcount += 1;
-}
-
-static void fstrack_dec_refcount(struct fs_info *si)
-{
-	struct fs_info_container *sic = FS_INFO_CONTAINER(si);
-
-	sic->meta.refcount -= 1;
-}
-
-static char *fs_tracker_pipe(void)
-{
-	char *fstrack_pipe = NULL;
-	char *s = getenv("FS_TRACKER_PIPE");
-
-    printf("Hello World from the library\n");
 	if (s == NULL) {
-		FSTRACK_LOG(FSTRACK_LOG_WARN, "FS_TRACKER_PIPE not set\n");
+		WISK_LOG(WISK_LOG_WARN, "WISK_TRACKER_PIPE not set\n");
 		return NULL;
 	}
 
-	fstrack_pipe = realpath(s, NULL);
-	if (fstrack_pipe == NULL) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
-			  "Unable to resolve fs_wrapper pipe path: %s",
-			  strerror(errno));
+	wisk_pipe_path = realpath(s, NULL);
+	if (wisk_pipe_path == NULL) {
+		WISK_LOG(WISK_LOG_ERROR,
+			  "Unable to resolve fs_wrapper pipe path: %s", s);
 		return NULL;
 	}
 
-	FSTRACK_LOG(FSTRACK_LOG_TRACE, "fs_tracker_pipe: %s", fstrack_pipe);
-	return fstrack_pipe;
+	return wisk_pipe_path;
 }
 
 static int fs_tracker_init_mutex(pthread_mutex_t *m)
@@ -684,85 +623,123 @@ done:
 	return ret;
 }
 
-static void fs_tracker_init_sockets(void)
+static void wisk_env_add(char *var, int *count)
 {
-	size_t max_sockets;
-	size_t i;
-	int ret;
+    char *s = getenv(var);
+    int len;
+    if (s) {
+        len = strlen(var)+strlen(s) + 2;
+        wisk_envp[*count] = malloc(len);
+        snprintf(wisk_envp[*count], len, "%s=%s", var, s);
+        *count++;
+    }
+}
 
-	fstrack_mutex_lock(&sockets_mutex);
+static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
+{
+	char *uuid;
+	int ret, i;
 
-	if (sockets != NULL) {
-		fstrack_mutex_unlock(&sockets_mutex);
-		return;
+	wisk_mutex_lock(&fs_tracker_pipe_mutex);
+	uuid = getenv(WISK_TRACKER_UUID);
+    if (uuid) {
+        strncpy(fs_tracker_uuid, uuid, UUID_SIZE);
+    } else {
+        strncpy(fs_tracker_uuid, "UNDEFINED_UUID", UUID_SIZE);
+    }
+
+    if (wisk.libc.symbols._libc_open.f) {
+	    WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
+        fs_tracker_pipe = wisk.libc.symbols._libc_open.f(fs_tracker_pipe_path, O_WRONLY);
+    } else {
+	    WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe: Local open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
+        fs_tracker_pipe = libc_open(fs_tracker_pipe_path, O_WRONLY);
+    }
+	if (fs_tracker_pipe < 0) {
+		WISK_LOG(WISK_LOG_ERROR, "File System Tracker Pipe %s cannot be opened for write\n", fs_tracker_pipe_path);
 	}
-
-
-	fstrack_mutex_lock(&first_free_mutex);
-
-	ret = fs_tracker_init_mutex(&autobind_start_mutex);
-	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
-			  "Failed to initialize pthread mutex");
-		goto done;
-	}
-
-	ret = fs_tracker_init_mutex(&pcap_dump_mutex);
-	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
-			  "Failed to initialize pthread mutex");
-		goto done;
-	}
-
-	ret = fs_tracker_init_mutex(&mtu_update_mutex);
-	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
-			  "Failed to initialize pthread mutex");
-		goto done;
-	}
+    wisk_env_count=0;
+    wisk_env_add(LD_PRELOAD, &wisk_env_count);
+    wisk_env_add(WISK_TRACKER_PIPE, &wisk_env_count);
+    wisk_env_add(WISK_TRACKER_DEBUGLEVEL, &wisk_env_count);
+    wisk_env_add(WISK_TRACKER_UUID, &wisk_env_count);
+    for(i=0; i<wisk_env_count; i++) {
+	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%s]", wisk_envp[i]);
+    }
 
 done:
-	fstrack_mutex_unlock(&first_free_mutex);
-	fstrack_mutex_unlock(&sockets_mutex);
-	if (ret != 0) {
-		exit(-1);
-	}
+	wisk_mutex_unlock(&fs_tracker_pipe_mutex);
 }
 
 bool fs_tracker_enabled(void)
 {
-	char *s = fs_tracker_pipe();
+	char *s;
 
+	if (fs_tracker_pipe >= 0) {
+		return true;
+	}
+	s = fs_tracker_pipe_getpath();
 	if (s == NULL) {
 		return false;
 	}
 
+	fs_tracker_init_pipe(s);
+
 	SAFE_FREE(s);
 
-	fs_tracker_init_sockets();
+	WISK_LOG(WISK_LOG_TRACE, "File System Tracker Enabled\n\n");
 
 	return true;
+}
+
+void wisk_write(const char *fname)
+{
+    char msgbuffer[BUFFER_SIZE];
+    int msglen;
+
+	if (fs_tracker_enabled()) {
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: Writes %s\n", fs_tracker_uuid, fname);
+        write(fs_tracker_pipe, msgbuffer, msglen); 
+    } else {
+        WISK_LOG(WISK_LOG_TRACE, "Writes %s", fname);
+	}
+}
+
+void wisk_read(const char *fname)
+{
+    char msgbuffer[BUFFER_SIZE];
+    int msglen;
+
+	if (fs_tracker_enabled()) {
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: Reads %s\n", fs_tracker_uuid, fname);
+        write(fs_tracker_pipe, msgbuffer, msglen); 
+    } else {
+        WISK_LOG(WISK_LOG_TRACE, "Reads %s", fname);
+	}
 }
 
 /****************************************************************************
  *   FOPEN
  ***************************************************************************/
 
-static FILE *fstrack_fopen(const char *name, const char *mode)
+static FILE *wisk_fopen(const char *name, const char *mode)
 {
-	FILE *fp;
-
-	if (!fs_tracker_enabled()) {
-        FSTRACK_LOG(FSTRACK_LOG_TRACE, "FS_TRACKER_PIPE not set\n");
-	}
+    WISK_LOG(WISK_LOG_TRACE, "wisk_fopen(%s, %s)", name, mode);
+    if (strlen(mode)==2) {
+        wisk_read(name);
+        wisk_write(name);
+    } else if ((mode[0] == 'w') || (mode[0] == 'a')) {
+        wisk_write(name);
+    } else {
+        wisk_read(name);
+    }
 	return libc_fopen(name, mode);
-
-	return fp;
 }
 
 FILE *fopen(const char *name, const char *mode)
 {
-	return fstrack_fopen(name, mode);
+    WISK_LOG(WISK_LOG_TRACE, "fopen(%s, %s)", name, mode);
+	return wisk_fopen(name, mode);
 }
 
 /****************************************************************************
@@ -770,10 +747,11 @@ FILE *fopen(const char *name, const char *mode)
  ***************************************************************************/
 
 #ifdef HAVE_FOPEN64
-static FILE *fstrack_fopen64(const char *name, const char *mode)
+static FILE *wisk_fopen64(const char *name, const char *mode)
 {
 	FILE *fp;
 
+    WISK_LOG(WISK_LOG_TRACE, "wisk_fopen64(%s, %s)", name, mode);
 	fp = libc_fopen64(name, mode);
 	if (fp != NULL) {
 		int fd = fileno(fp);
@@ -784,7 +762,8 @@ static FILE *fstrack_fopen64(const char *name, const char *mode)
 
 FILE *fopen64(const char *name, const char *mode)
 {
-	return fstrack_fopen64(name, mode);
+    WISK_LOG(WISK_LOG_TRACE, "fopen64(%s, %s)", name, mode);
+	return wisk_fopen64(name, mode);
 }
 #endif /* HAVE_FOPEN64 */
 
@@ -792,10 +771,21 @@ FILE *fopen64(const char *name, const char *mode)
  *   OPEN
  ***************************************************************************/
 
-static int fstrack_vopen(const char *pathname, int flags, va_list ap)
+static int wisk_vopen(const char *pathname, int flags, va_list ap)
 {
 	int ret;
 
+    WISK_LOG(WISK_LOG_TRACE, "wisk_vopen(%s, %d)", pathname, flags);
+    if ((flags & O_WRONLY) && (flags & O_RDONLY)) {
+        wisk_read(pathname);
+        wisk_write(pathname);
+    } else if (flags & O_WRONLY) {
+        wisk_write(pathname);
+    } else if (flags & O_RDONLY) {
+        wisk_read(pathname);
+    } else {
+        wisk_read(pathname);
+    }
 	ret = libc_vopen(pathname, flags, ap);
 	if (ret != -1) {
 	}
@@ -807,8 +797,9 @@ int open(const char *pathname, int flags, ...)
 	va_list ap;
 	int fd;
 
+    WISK_LOG(WISK_LOG_TRACE, "open(%s, %d)", pathname, flags);
 	va_start(ap, flags);
-	fd = fstrack_vopen(pathname, flags, ap);
+	fd = wisk_vopen(pathname, flags, ap);
 	va_end(ap);
 
 	return fd;
@@ -819,10 +810,11 @@ int open(const char *pathname, int flags, ...)
  ***************************************************************************/
 
 #ifdef HAVE_OPEN64
-static int fstrack_vopen64(const char *pathname, int flags, va_list ap)
+static int wisk_vopen64(const char *pathname, int flags, va_list ap)
 {
 	int ret;
 
+    WISK_LOG(WISK_LOG_TRACE, "wisk_vopen64(%s, %d)", pathname, flags);
 	ret = libc_vopen64(pathname, flags, ap);
 	if (ret != -1) {
 		/*
@@ -840,8 +832,9 @@ int open64(const char *pathname, int flags, ...)
 	va_list ap;
 	int fd;
 
+    WISK_LOG(WISK_LOG_TRACE, "open64(%s, %d)", pathname, flags);
 	va_start(ap, flags);
-	fd = fstrack_vopen64(pathname, flags, ap);
+	fd = wisk_vopen64(pathname, flags, ap);
 	va_end(ap);
 
 	return fd;
@@ -852,10 +845,11 @@ int open64(const char *pathname, int flags, ...)
  *   OPENAT
  ***************************************************************************/
 
-static int fstrack_vopenat(int dirfd, const char *path, int flags, va_list ap)
+static int wisk_vopenat(int dirfd, const char *path, int flags, va_list ap)
 {
 	int ret;
 
+    WISK_LOG(WISK_LOG_TRACE, "wisk_vopenat(%d, %s, %d)", dirfd, path, flags);
 	ret = libc_vopenat(dirfd, path, flags, ap);
 	if (ret != -1) {
 		/*
@@ -874,75 +868,106 @@ int openat(int dirfd, const char *path, int flags, ...)
 	va_list ap;
 	int fd;
 
+    WISK_LOG(WISK_LOG_TRACE, "openat(%d, %s, %d)", dirfd, path, flags);
 	va_start(ap, flags);
-	fd = fstrack_vopenat(dirfd, path, flags, ap);
+	fd = wisk_vopenat(dirfd, path, flags, ap);
 	va_end(ap);
 
 	return fd;
 }
 
+/****************************************************************************
+ *   EXECVE
+ ***************************************************************************/
+
+static int envcmp(const char *env, const char *var)
+{
+    int len;
+    len = strlen(var);
+    return (strncmp(env, var, len) == 0 && env[len] == '=');
+}
+
+static int wisk_getvarcount(char *const envp[])
+{
+    int envc, i;
+
+    for (i=0, envc=1; envp[i]; i++) {
+      if (envcmp(envp[i], LD_PRELOAD) ||
+          envcmp(envp[i], WISK_TRACKER_PIPE) ||
+          envcmp(envp[i], WISK_TRACKER_DEBUGLEVEL) ||
+          envcmp(envp[i], WISK_TRACKER_UUID)) {
+          WISK_LOG(WISK_LOG_TRACE, "Skipping Environment %d: %s", i, envp[i]);
+          continue;
+        }
+      WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, envp[i]);
+      envc++;
+    }
+    WISK_LOG(WISK_LOG_TRACE, "Var Count: %d",  envc);
+    return envc;
+}
+
+static void wisk_loadenv(char *const envp[], char *nenvp[])
+{
+    int envi, i;
+
+    for(envi=0; envi < wisk_env_count; envi++)
+        nenvp[envi] = wisk_envp[envi];
+    for (i=0; envp[i]; i++) {
+      if (envcmp(envp[i], LD_PRELOAD) ||
+          envcmp(envp[i], WISK_TRACKER_PIPE) ||
+          envcmp(envp[i], WISK_TRACKER_DEBUGLEVEL) ||
+          envcmp(envp[i], WISK_TRACKER_UUID))
+          continue;
+      nenvp[envi++] = envp[i];
+    }
+    nenvp[envi++] = envp[i];
+    for(i=0; nenvp[i]; i++) {
+        WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
+    }
+    WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
+}
+
+static int wisk_execve(const char *pathname, char *const argv[], char *const envp[])
+{
+    int i;
+    WISK_LOG(WISK_LOG_TRACE, "wisk_execve(%s)", pathname);
+    /* Avoid dynamic memory allocation due two main issues:
+       1. The function should be async-signal-safe and a running on a signal
+          handler with a fail outcome might lead to malloc bad state.
+       2. It might be used in a vfork/clone(VFORK) scenario where using
+          malloc also might lead to internal bad state.  */
+	if (fs_tracker_enabled()) {
+        char *nenvp[wisk_getvarcount(envp) + wisk_env_count + 1];
+        wisk_loadenv(envp, nenvp);
+	    return libc_execve(pathname, argv, nenvp);
+    } else
+	    return libc_execve(pathname, argv, envp);
+}
+
+int execve(const char *pathname, char *const argv[], char *const envp[])
+{
+    WISK_LOG(WISK_LOG_TRACE, "execve(%s)", pathname);
+	return wisk_execve(pathname, argv, envp);
+}
+
+static int wisk_execveat(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags)
+{
+    WISK_LOG(WISK_LOG_TRACE, "wisk_execveat(%s)", pathname);
+	return libc_execveat(dirfd, pathname, argv, envp, flags);
+}
+
+int execveat(int dirfd, const char *pathname, char *const argv[], char *const envp[], int flags)
+{
+    WISK_LOG(WISK_LOG_TRACE, "wisk_execveat(%s)", pathname);
+	return wisk_execveat(dirfd, pathname, argv, envp, flags);
+}
+
 /****************************
- * DUP
+ * Thread safe code
  ***************************/
-
-static int fstrack_dup(int fd)
+static void wisk_thread_prepare(void)
 {
-	struct fs_info *si;
-	int dup_fd, idx;
-
-	dup_fd = libc_dup(fd);
-	if (dup_fd == -1) {
-		int saved_errno = errno;
-		errno = saved_errno;
-		return -1;
-	}
-
-	FSTRACK_LOCK_SI(si);
-
-	fstrack_inc_refcount(si);
-
-	FSTRACK_UNLOCK_SI(si);
-
-	return dup_fd;
-}
-
-int dup(int fd)
-{
-	return fstrack_dup(fd);
-}
-
-/****************************
- * DUP2
- ***************************/
-
-static int fstrack_dup2(int fd, int newfd)
-{
-	struct fs_info *si;
-	int dup_fd, idx;
-
-	dup_fd = libc_dup2(fd, newfd);
-	if (dup_fd == -1) {
-		int saved_errno = errno;
-		errno = saved_errno;
-		return -1;
-	}
-
-	FSTRACK_LOCK_SI(si);
-
-	fstrack_inc_refcount(si);
-
-	FSTRACK_UNLOCK_SI(si);
-
-	return dup_fd;
-}
-
-int dup2(int fd, int newfd)
-{
-	return fstrack_dup2(fd, newfd);
-}
-
-static void fstrack_thread_prepare(void)
-{
+	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_prepare: ");
 	/*
 	 * This function should only be called here!!
 	 *
@@ -950,57 +975,47 @@ static void fstrack_thread_prepare(void)
 	 * interrupted by a signal handler using a symbol of this
 	 * library.
 	 */
-	fstrack_bind_symbol_all();
+	wisk_bind_symbol_all();
 
-	FSTRACK_LOCK_ALL;
+	WISK_LOCK_ALL;
 }
 
-static void fstrack_thread_parent(void)
+static void wisk_thread_parent(void)
 {
-	FSTRACK_UNLOCK_ALL;
+	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_parent: ");
+	WISK_UNLOCK_ALL;
 }
 
-static void fstrack_thread_child(void)
+static void wisk_thread_child(void)
 {
-	FSTRACK_UNLOCK_ALL;
+	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_child: ");
+	WISK_UNLOCK_ALL;
 }
 
 /****************************
  * CONSTRUCTOR
  ***************************/
-void fstrack_constructor(void)
+void wisk_constructor(void)
 {
 	int ret;
 
+	WISK_LOG(WISK_LOG_TRACE, "Constructor ");
 	/*
 	* If we hold a lock and the application forks, then the child
 	* is not able to unlock the mutex and we are in a deadlock.
 	* This should prevent such deadlocks.
 	*/
-	pthread_atfork(&fstrack_thread_prepare,
-		       &fstrack_thread_parent,
-		       &fstrack_thread_child);
+	pthread_atfork(&wisk_thread_prepare,
+		       &wisk_thread_parent,
+		       &wisk_thread_child);
 
-	ret = fs_tracker_init_mutex(&sockets_mutex);
+	ret = fs_tracker_init_mutex(&fs_tracker_pipe_mutex);
 	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
+		WISK_LOG(WISK_LOG_ERROR,
 			  "Failed to initialize pthread mutex");
 		exit(-1);
 	}
-
-	ret = fs_tracker_init_mutex(&socket_reset_mutex);
-	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
-			  "Failed to initialize pthread mutex");
-		exit(-1);
-	}
-
-	ret = fs_tracker_init_mutex(&first_free_mutex);
-	if (ret != 0) {
-		FSTRACK_LOG(FSTRACK_LOG_ERROR,
-			  "Failed to initialize pthread mutex");
-		exit(-1);
-	}
+	fs_tracker_enabled();
 }
 
 /****************************
@@ -1011,16 +1026,15 @@ void fstrack_constructor(void)
  * This function is called when the library is unloaded and makes sure that
  * sockets get closed and the unix file for the socket are unlinked.
  */
-void fstrack_destructor(void)
+void wisk_destructor(void)
 {
 	size_t i;
 
-	SAFE_FREE(sockets);
-
-	if (swrap.libc.handle != NULL) {
-		dlclose(swrap.libc.handle);
+	if (wisk.libc.handle != NULL) {
+		dlclose(wisk.libc.handle);
 	}
-	if (swrap.libc.socket_handle) {
-		dlclose(swrap.libc.socket_handle);
+	if (wisk.libc.socket_handle) {
+		dlclose(wisk.libc.socket_handle);
 	}
+	WISK_LOG(WISK_LOG_TRACE, "Destructor ");
 }

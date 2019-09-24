@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+# encoding: utf-8
+'''
+wisktrack -- A program to wisktrack
+
+
+@author:     sarvi
+
+@copyright:  2019 Cisco Inc. All rights reserved.
+
+@license:    license
+
+@contact:    sarvi@cisco.com
+@deffield    updated: Updated
+'''
+
+from __future__ import print_function
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../python2/current/lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../lib/python/'))
+try:
+    from common.env import exit_clean
+    import wisktrack
+except ImportError as ex:
+    sys.path.append(os.path.join(os.path.dirname(__file__), '../src/'))
+    from common.env import exit_clean
+    import wisktrack
+
+TESTRUN = 0
+PROFILE = 0
+
+wisktrack.__programname__ = os.path.basename(__file__)
+wisktrack.__programpath__ = os.path.dirname(__file__)
+
+if __name__ == "__main__":
+    if TESTRUN:
+        import doctest
+        doctest.testmod()
+    if PROFILE:
+        import cProfile
+        import pstats
+        PROFILE_FILENAME = 'mytest_profile.txt'
+        cProfile.run('wisktrack.main()', PROFILE_FILENAME)
+        statsfile = open("profile_stats.txt", "wb")  # pylint: disable=locally-disabled, C0103
+        PSTAT = pstats.Stats(PROFILE_FILENAME, stream=statsfile)
+        stats = PSTAT.strip_dirs().sort_stats('cumulative')  # pylint: disable=locally-disabled, C0103
+        stats.print_stats()
+        statsfile.close()
+        sys.exit(exit_clean(0))
+    sys.exit(exit_clean(wisktrack.main()))
