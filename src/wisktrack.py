@@ -70,7 +70,8 @@ def dotrack(args):
     os.mkfifo(WISK_TRACKER_PIPE)
     bgcmd = TrackedRunner(args)
     for l in open(WISK_TRACKER_PIPE).readlines():
-        print(l)
+        print(l.strip())
+    print()
     print('Deleting Recieving FIFO Pipe: %s' % (WISK_TRACKER_PIPE))
     os.unlink(WISK_TRACKER_PIPE)
 

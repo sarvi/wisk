@@ -53,6 +53,7 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <uuid/uuid.h>
 
 // Environment Variables
 #define LD_PRELOAD "LD_PRELOAD"
@@ -134,6 +135,7 @@ enum wisk_dbglvl_e {
 
 #define WISK_VAR_COUNT 4
 static char *wisk_envp[WISK_VAR_COUNT];
+static char *wisk_env_uuid;
 static int wisk_env_count = 0;
 static int fs_tracker_pipe = -1;
 static char fs_tracker_uuid[UUID_SIZE];
@@ -625,13 +627,17 @@ done:
 
 static void wisk_env_add(char *var, int *count)
 {
-    char *s = getenv(var);
+    char *s;
     int len;
+    s = getenv(var);
     if (s) {
         len = strlen(var)+strlen(s) + 2;
         wisk_envp[*count] = malloc(len);
         snprintf(wisk_envp[*count], len, "%s=%s", var, s);
-        *count++;
+        if (strcmp(var, WISK_TRACKER_UUID)==0) {
+            wisk_env_uuid = wisk_envp[*count] + strlen(WISK_TRACKER_UUID) + 2;
+        }
+        (*count)++;
     }
 }
 
@@ -909,7 +915,10 @@ static int wisk_getvarcount(char *const envp[])
 static void wisk_loadenv(char *const envp[], char *nenvp[])
 {
     int envi, i;
+    uuid_t uuid;
 
+    uuid_generate(uuid);
+    uuid_unparse(uuid, wisk_env_uuid);
     for(envi=0; envi < wisk_env_count; envi++)
         nenvp[envi] = wisk_envp[envi];
     for (i=0; envp[i]; i++) {
@@ -927,9 +936,29 @@ static void wisk_loadenv(char *const envp[], char *nenvp[])
     WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
 }
 
+void  wisk_command(const char *pathname, char *const argv[], char *const envp[])
+{
+    int i, msglen;
+    char msgbuffer[BUFFER_SIZE];
+
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: calls %s\n", fs_tracker_uuid, wisk_env_uuid);
+    write(fs_tracker_pipe, msgbuffer, msglen); 
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: command-path %s\n", wisk_env_uuid, pathname);
+    write(fs_tracker_pipe, msgbuffer, msglen); 
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: command [", wisk_env_uuid);
+    for(i=0; argv[i]; i++)
+        msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\" ", argv[i]);
+    msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
+    write(fs_tracker_pipe, msgbuffer, msglen); 
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: environment [", wisk_env_uuid);
+    for(i=wisk_env_count; envp[i]; i++)
+        msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\", ", envp[i]);
+    msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
+    write(fs_tracker_pipe, msgbuffer, msglen); 
+}
+
 static int wisk_execve(const char *pathname, char *const argv[], char *const envp[])
 {
-    int i;
     WISK_LOG(WISK_LOG_TRACE, "wisk_execve(%s)", pathname);
     /* Avoid dynamic memory allocation due two main issues:
        1. The function should be async-signal-safe and a running on a signal
@@ -939,6 +968,7 @@ static int wisk_execve(const char *pathname, char *const argv[], char *const env
 	if (fs_tracker_enabled()) {
         char *nenvp[wisk_getvarcount(envp) + wisk_env_count + 1];
         wisk_loadenv(envp, nenvp);
+        wisk_command(pathname, argv, nenvp);
 	    return libc_execve(pathname, argv, nenvp);
     } else
 	    return libc_execve(pathname, argv, envp);

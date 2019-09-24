@@ -16,7 +16,7 @@ runtests: install
 	make -C ../tests
 
 libfilesystem_tracker.so: filesystem_tracker.o
-	$(CXX) -shared -fPIC -pthread $(LDFLAGS) -ldl -o $@ $^
+	$(CXX) -shared -fPIC -pthread -luuid $(LDFLAGS) -ldl -o $@ $^
 
 filesystem_tracker.o: filesystem_tracker.c
 	$(CXX) -fPIC -pthread -c -o $@ $^
