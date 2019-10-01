@@ -7,6 +7,7 @@ build
 obj*/
 cscope.*
 tags
+*.pyc
 *.o
 *.so
 *.bin

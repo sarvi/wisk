@@ -19,6 +19,7 @@ import uuid
 import threading
 import traceback
 import logging
+import subprocess
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
 from html2text import html2text
@@ -37,42 +38,62 @@ __date__ = env.get_reldatetime()
 __updated__ = env.get_reldatetime()
 
 
+WISK_TRACKER_VERBOSITY = 0
 WISK_TRACKER_PIPE='/tmp/wisk_tracker.pipe'
-
-SHELL = utils.Shell(env={'PATH': '/bin:/usr/bin:/sbin:/usr/sbin:/usr/cisco/bin:/router/bin'})
+WISK_TRACKER_UUID=str(uuid.uuid4())
 
 class TrackedRunner(object):
     def __init__(self, args):
         self.args = args
+        log.info('Verbosity: %d', WISK_TRACKER_VERBOSITY)
         self.cmdenv = {
             'LD_PRELOAD': os.path.join(env.INSTALL_PKG_ROOT, 'libwisktrack.so'),
             'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
-            'WISK_TRACKER_UUID': str(uuid.uuid4()),
-            'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose + 1))}
-        thread = threading.Thread(target=self.run, args=())
-        thread.daemon = True
-        thread.start()
+            'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
+            'WISK_TRACKER_DEBUGLEVEL': ('%d' % (WISK_TRACKER_VERBOSITY))}
+        print(self.cmdenv)
+        self.thread = threading.Thread(target=self.run, args=())
+        self.thread.daemon = True
+        self.thread.start()
         return
 
     def run(self):
+        global WISK_RV
         log.debug('Environment & Command: %s, %s', self.cmdenv, ' '.join(self.args.command))
-        SHELL.runcmd(*self.args.command, env=self.cmdenv)
+        self.retval = subprocess.run(self.args.command, env=self.cmdenv)
+        return self.retval.returncode
+    
+    def waitforcompletion(self):
+        self.thread.join()
 
-def dotrack(args):
-    ''' do wisktrack of a command'''
+def create_reciever():
     if os.path.exists(WISK_TRACKER_PIPE):
         os.unlink(WISK_TRACKER_PIPE)
     print("WISK PID: %d" % os.getpid())
     print('Creating Recieving FIFO Pipe: %s' % WISK_TRACKER_PIPE)
     os.mkfifo(WISK_TRACKER_PIPE)
-    bgcmd = TrackedRunner(args)
+
+def read_reciever(args):
+    file = open(args.trackfile, 'w') if args.trackfile else sys.stdout
     for l in open(WISK_TRACKER_PIPE).readlines():
-        print(l.strip())
-    print()
-    print('Deleting Recieving FIFO Pipe: %s' % (WISK_TRACKER_PIPE))
+        file.write(l.strip())
+
+def delete_reciever():    
+    print('\nDeleting Recieving FIFO Pipe: %s' % (WISK_TRACKER_PIPE))
     os.unlink(WISK_TRACKER_PIPE)
 
-    return 0
+def dotrack(args):
+    ''' do wisktrack of a command'''
+    global WISK_TRACKER_VERBOSITY
+    global WISK_RV
+    WISK_TRACKER_VERBOSITY = args.verbose + 1
+    create_reciever()
+    runner = TrackedRunner(args)
+    read_reciever(args)
+    delete_reciever()
+    runner.waitforcompletion()
+    print('\nTracking Complete')
+    return runner.retval.returncode
 
 
 class CLIError(Exception):
@@ -130,13 +151,14 @@ Example:
                             help="Set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         parser.add_argument('-dry', '--dryrun', action='store_true', default=False, help="A dry on of the operations")
+        parser.add_argument('-trackfile', '--trackfile', type=str, default=None, help="Where to output the tracking data")
 
         parser.add_argument("command", type=str, nargs="+", help="Command an args to track")
 
         args = parser.parse_args()
 
         # Setup verbose
-        env.logging_setup(args.verbose, onlyerrorlogs=True)
+        env.logging_setup(args.verbose)
 
         return dotrack(args)
     except KeyboardInterrupt:

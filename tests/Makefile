@@ -1,7 +1,7 @@
 
 
-SRCS = $(wildcard *.c)
-# SRCS = test_execve1.c
+# SRCS = $(wildcard *.c)
+SRCS = test_exec.c
 PROGS = $(patsubst %.c,%.testbin,$(SRCS))
 
 CXX=/router/bin/gcc.c4.9.3-p0
@@ -11,6 +11,7 @@ TRACKER_PIPE = /tmp/tracker.pipe
 
 .PHONY: all
 all: $(PROGS)
+#	${SCRIPTDIR}/wisktrack -vvvv code.py
 #	${SCRIPTDIR}/wisktrack -vv ./test_open1.testbin
 #	FS_TRACKER_PIPE=$TRACKER_PIPE LD_PRELOAD=../binaries/libwisktrack.so ./hello_world.testbin
 
@@ -23,7 +24,12 @@ testall:
 	@echo "Compiling Test Case"
 	$(CXX) -fPIC $(LDFLAGS) -o $@ $^
 	@echo "Testing Started"
-	${SCRIPTDIR}/wisktrack -vvvv ./$@
+	if [[ "$@" == "test_exec.testbin" ]]; then \
+	    ./$@ execv ; ./$@ execve ; ./$@ execvpe ; ./$@ execvp ; ./$@ execl ; ./$@ execle ; ./$@ execlp ; ./$@ execlpe ; \
+	else \
+	    ./$@ ; \
+	fi
+#	${SCRIPTDIR}/wisktrack -vvvv ./$@
 	@echo "Testing Complete"
 	@rm $@
 
