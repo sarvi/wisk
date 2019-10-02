@@ -34,9 +34,9 @@ if False:
     ld_preload.execvp(c_char_p(b'/bin/touch'), arrayofstr([b'/bin/touch', b'/tmp/file1', None]))
 
 
+TEMPLATE_EXESCRIPT='#!{PYTHON}\n'.format(PYTHON=sys.executable)
 
-TEMPLATE_COMMON = '''
-#!{PYTHON}
+TEMPLATE_COMMON = TEMPLATE_EXESCRIPT + '''
 import sys
 from ctypes import *
 LD_PRELOAD='{LD_PRELOAD}'
@@ -48,7 +48,7 @@ def arrayofstr(L):
     arr[:] = [(c_char_p(i) if i else i) for i in L]
     return arr
 
-'''.format(LD_PRELOAD=LD_PRELOAD, PYTHON=sys.executable)
+'''.format(LD_PRELOAD=LD_PRELOAD)
 
 
 testcases = [
@@ -128,7 +128,7 @@ ld_preload.execv(c_char_p(b'/bin/touch'), arrayofstr([b'/bin/touch', b'/tmp/{tes
      '''],
 
     [0, ('Writes /tmp/{testname}/file1',),
-     '''
+     TEMPLATE_EXESCRIPT+'''
 import os
 os.system('/bin/touch /tmp/{testname}/file1')
      '''],
@@ -178,6 +178,9 @@ class TestExec(unittest.TestCase):
         self.tracks = tuple([i.format(testname=self.id(), wsroot=WSROOT) for i in self.tracks])
         self.testscript = '/tmp/{}/testscript'.format(self.id())
         open(self.testscript, 'w').write(self.code)
+        print(self.testscript)
+        os.chmod(self.testscript, os.stat(self.testscript).st_mode | stat.S_IEXEC)
+        
         
 
     def tearDown(self):
@@ -188,7 +191,7 @@ class TestExec(unittest.TestCase):
 #        args = argparse.Namespace(command=["/bin/cat", "%s/tests/test_open1.c" % WSROOT], verbose=3)
 #         args = argparse.Namespace(command=['tests/code.py'], verbose=4)
         print(self.code)
-        args = argparse.Namespace(command=[sys.executable, self.testscript], verbose=4, trackfile=None)
+        args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
         wisktrack.create_reciever()        
         runner = wisktrack.TrackedRunner(args)
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]

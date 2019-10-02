@@ -16,10 +16,15 @@ from __future__ import print_function
 import os
 import sys
 import uuid
+import time
+import fcntl
 import threading
 import traceback
 import logging
+import random
+import json
 import subprocess
+import re
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
 from html2text import html2text
@@ -38,19 +43,61 @@ __date__ = env.get_reldatetime()
 __updated__ = env.get_reldatetime()
 
 
-WISK_TRACKER_VERBOSITY = 0
 WISK_TRACKER_PIPE='/tmp/wisk_tracker.pipe'
-WISK_TRACKER_UUID=str(uuid.uuid4())
+WISK_TRACKER_UUID='XXXXXXXX-XXXXXXXX-XXXXXXXX'
+
+class ProgramNode(object):
+    progtree = {}
+    
+    def __init__(self, uuid, parent=None):
+        self.uuid = uuid
+        if parent is None:
+            self.parent = None
+        elif parent == WISK_TRACKER_UUID:
+            self.parent = ProgramNode.progtree.setdefault(WISK_TRACKER_UUID, ProgramNode(WISK_TRACKER_UUID))
+        else:
+            self.parent = ProgramNode.progtree[parent]
+        self.parent =  parent
+        self.children = []
+        self.operations = {}
+        if parent:
+            p = ProgramNode.progtree[parent]
+            p.children.append(self)
+        ProgramNode.progtree[uuid] = self
+
+    @classmethod
+    def add_operation(cls, uuid, operation, *args):
+        pn = cls.progtree[uuid]
+        op = pn.operations.setdefault(operation, list())
+        op.extend(args)
+
+    @classmethod        
+    def show_nodes(self, node=None):
+        if node is None:
+            node = ProgramNode.progtree[WISK_TRACKER_UUID]
+        print('UUID: %s' % node.uuid)
+        print('\tParent UUID: %s' % (node.parent.uuid if node.parent is not None else None))
+        for op, val in node.operations.items():
+            print('Operation: %s' % op)
+            for i in val:
+                print('\t\t%s' % i)
+        for n in node.children:
+            n.show_nodes()
+        
+        
 
 class TrackedRunner(object):
     def __init__(self, args):
         self.args = args
-        log.info('Verbosity: %d', WISK_TRACKER_VERBOSITY)
-        self.cmdenv = {
+        self.retval = None
+        self.wisk_verbosity = args.verbose + 1
+        log.info('Verbosity: %d', self.wisk_verbosity)
+        self.cmdenv = dict(os.environ)
+        self.cmdenv.update({
             'LD_PRELOAD': os.path.join(env.INSTALL_PKG_ROOT, 'libwisktrack.so'),
             'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
             'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
-            'WISK_TRACKER_DEBUGLEVEL': ('%d' % (WISK_TRACKER_VERBOSITY))}
+            'WISK_TRACKER_DEBUGLEVEL': ('%d' % (self.wisk_verbosity))})
         print(self.cmdenv)
         self.thread = threading.Thread(target=self.run, args=())
         self.thread.daemon = True
@@ -58,9 +105,14 @@ class TrackedRunner(object):
         return
 
     def run(self):
-        global WISK_RV
-        log.debug('Environment & Command: %s, %s', self.cmdenv, ' '.join(self.args.command))
-        self.retval = subprocess.run(self.args.command, env=self.cmdenv)
+        log.debug('Environment:\n%s', self.cmdenv)
+        log.debug('Command:%s', ' '.join(self.args.command))
+        print('Running: %s'  % self.args.command)
+        try:
+            self.retval = subprocess.run(self.args.command, env=self.cmdenv)
+        except FileNotFoundError as e:
+            print(e)
+            return 255
         return self.retval.returncode
     
     def waitforcompletion(self):
@@ -73,10 +125,37 @@ def create_reciever():
     print('Creating Recieving FIFO Pipe: %s' % WISK_TRACKER_PIPE)
     os.mkfifo(WISK_TRACKER_PIPE)
 
-def read_reciever(args):
-    file = open(args.trackfile, 'w') if args.trackfile else sys.stdout
-    for l in open(WISK_TRACKER_PIPE).readlines():
-        file.write(l.strip())
+def readlineswithwait(runner, ifilefd):
+    ifile=os.fdopen(ifilefd)
+    while runner.thread.is_alive():
+        try:
+            line = ifile.readline()
+        except:
+            continue
+        if line:
+            yield line
+    flags = fcntl.fcntl(ifilefd, fcntl.F_GETFL)
+    flags = flags & ~os.O_NONBLOCK
+    fcntl.fcntl(ifilefd, fcntl.F_SETFL,  flags)
+    for line in ifile.readlines():
+        yield line 
+
+def read_reciever(runner, args):
+    ofile= open(args.trackfile, 'w') if args.trackfile else sys.stdout
+#     ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY | os.O_NONBLOCK)
+    ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY)
+    for l in readlineswithwait(runner, ifilefd):
+        parts = l.split()
+        uuid = parts[0].strip().strip(':')
+        operation = parts[1].strip()
+        data = ' '.join(parts[2:])
+        if operation == 'environment':
+            data = json.loads(data)
+        if operation=='calls':
+            ProgramNode(l.split(' ')[2].strip(), uuid)
+        else:
+            ProgramNode.add_operation(uuid, operation, data)
+        ofile.write('{} {} {}\n'.format(uuid, operation, data))
 
 def delete_reciever():    
     print('\nDeleting Recieving FIFO Pipe: %s' % (WISK_TRACKER_PIPE))
@@ -84,16 +163,17 @@ def delete_reciever():
 
 def dotrack(args):
     ''' do wisktrack of a command'''
-    global WISK_TRACKER_VERBOSITY
-    global WISK_RV
-    WISK_TRACKER_VERBOSITY = args.verbose + 1
     create_reciever()
     runner = TrackedRunner(args)
-    read_reciever(args)
+    read_reciever(runner, args)
     delete_reciever()
-    runner.waitforcompletion()
-    print('\nTracking Complete')
-    return runner.retval.returncode
+    if runner.thread.is_alive():
+        runner.waitforcompletion()
+    print('\nTracking Complete,', end='')
+    if args.trackfile:
+        print(' Trackfile at %s' % args.trackfile)
+#    ProgramNode.show_nodes()
+    return (runner.retval.returncode if runner.retval is not None else 0)
 
 
 class CLIError(Exception):
@@ -153,9 +233,8 @@ Example:
         parser.add_argument('-dry', '--dryrun', action='store_true', default=False, help="A dry on of the operations")
         parser.add_argument('-trackfile', '--trackfile', type=str, default=None, help="Where to output the tracking data")
 
-        parser.add_argument("command", type=str, nargs="+", help="Command an args to track")
-
-        args = parser.parse_args()
+        args, command = parser.parse_known_args()
+        args.command = command
 
         # Setup verbose
         env.logging_setup(args.verbose)
