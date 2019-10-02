@@ -17,8 +17,9 @@ wisktrack -- A program to wisktrack
 from __future__ import print_function
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../python2/current/lib'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../python3/current/lib'))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../lib/python/'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../lib/python3.5/site-packages'))
 try:
     from common.env import exit_clean
     import wisktrack

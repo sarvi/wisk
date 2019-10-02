@@ -153,7 +153,7 @@ char *wisk_env_vars[] = {
 
 static char *wisk_envp[WISK_ENV_VARCOUNT];
 // static char *wisk_env_uuid;
-static int wisk_env_count = 0;
+static int wisk_env_count;
 static pid_t fs_tracker_pid = -1;
 static int fs_tracker_pipe = -1;
 static char fs_tracker_uuid[UUID_SIZE+1];
@@ -904,8 +904,9 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
     } else {
         strncpy(fs_tracker_puuid, "XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX", UUID_SIZE);
     }
-    setenv(WISK_TRACKER_UUID, fs_tracker_uuid, 1);
+//    setenv(WISK_TRACKER_UUID, fs_tracker_uuid, 1);
 
+    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
     if (wisk.libc.symbols._libc_open.f) {
 	    WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
         fs_tracker_pipe = wisk.libc.symbols._libc_open.f(fs_tracker_pipe_path, O_WRONLY);
@@ -916,11 +917,13 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	if (fs_tracker_pipe < 0) {
 		WISK_LOG(WISK_LOG_ERROR, "File System Tracker Pipe %s cannot be opened for write\n", fs_tracker_pipe_path);
 	}
+    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
 	for(wisk_env_count=0, i=0; i< WISK_ENV_VARCOUNT; i++)
         wisk_env_add(wisk_env_vars[i], &wisk_env_count);
     for(i=0; i<wisk_env_count; i++) {
 	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%s]", wisk_envp[i]);
     }
+    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
     wisk_report_command();
 
 done:
@@ -1255,6 +1258,7 @@ static void wisk_loadenv(char *const envp[], char *nenvp[])
     int envi=0, i;
     uuid_t uuid;
 
+	WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
 	for(envi=0; envi < wisk_env_count; envi++)
 		nenvp[envi] = wisk_envp[envi];
 //	wisk_generate_uuid(nenvp);

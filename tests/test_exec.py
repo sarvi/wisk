@@ -52,6 +52,12 @@ def arrayofstr(L):
 
 
 testcases = [
+    [0, ('Writes /tmp/{testname}/file1',),
+     TEMPLATE_EXESCRIPT+'''
+import os
+os.system('/bin/touch /tmp/{testname}/file1')
+     '''],
+
     [0, tuple(),
      TEMPLATE_COMMON+'''
 sys.exit(ld_preload.execlpe(c_char_p(b'cat'), c_char_p(b'cat'), c_char_p(b'--help'), None, arrayofstr([None])))
@@ -125,12 +131,6 @@ ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'{wsroot}/test
     [0, ('Writes /tmp/{testname}/file1',),
      TEMPLATE_COMMON+'''
 ld_preload.execv(c_char_p(b'/bin/touch'), arrayofstr([b'/bin/touch', b'/tmp/{testname}/file1', None]))
-     '''],
-
-    [0, ('Writes /tmp/{testname}/file1',),
-     TEMPLATE_EXESCRIPT+'''
-import os
-os.system('/bin/touch /tmp/{testname}/file1')
      '''],
 
     [0, ('Reads {wsroot}/tests/fixtures/testcat.data',),
