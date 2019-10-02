@@ -188,8 +188,6 @@ class TestExec(unittest.TestCase):
             shutil.rmtree('/tmp/{}/'.format(self.id()))
 
     def test_exec(self):
-#        args = argparse.Namespace(command=["/bin/cat", "%s/tests/test_open1.c" % WSROOT], verbose=3)
-#         args = argparse.Namespace(command=['tests/code.py'], verbose=4)
         print(self.code)
         args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
         wisktrack.create_reciever()        

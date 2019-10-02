@@ -904,7 +904,6 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
     } else {
         strncpy(fs_tracker_puuid, "XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX", UUID_SIZE);
     }
-//    setenv(WISK_TRACKER_UUID, fs_tracker_uuid, 1);
 
     WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
     if (wisk.libc.symbols._libc_open.f) {
@@ -948,6 +947,9 @@ bool fs_tracker_enabled(void)
 
 	WISK_LOG(WISK_LOG_TRACE, "File System Tracker Enabled\n\n");
 
+	// This needs to be done last for some reason. screws up thinigs otherwise. Thread safety?
+	// Cant handle being called from the constructor in clones
+	setenv(WISK_TRACKER_UUID, fs_tracker_uuid, 1);
 	return true;
 }
 

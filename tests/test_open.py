@@ -5,6 +5,8 @@ Created on Sep 25, 2019
 '''
 import os
 import sys
+import stat
+import shutil
 import argparse
 import subprocess
 import unittest
@@ -32,25 +34,58 @@ print('Complette')
      '''],
 ]
 
-@parameterized_class(('tracks', 'code'), testcases)
+TEMPLATE_EXESCRIPT='#!{PYTHON}\n'.format(PYTHON=sys.executable)
+
+TEMPLATE_COMMON = TEMPLATE_EXESCRIPT + '''
+'''.format(LD_PRELOAD=LD_PRELOAD)
+
+
+testcases = [
+    [0, ('Writes /tmp/file1',
+     'Writes /tmp/file2',
+     'Reads /tmp/file1',
+     'Reads /tmp/file2'),
+     TEMPLATE_EXESCRIPT+     '''
+open('/tmp/file1', 'w').close()
+open('/tmp/file2', 'w').close()
+open('/tmp/file1', 'r').close()
+open('/tmp/file2', 'r').close()
+print('Complette')
+     '''],
+]
+
+@parameterized_class(('returncode', 'tracks', 'code'), testcases)
 class TestOpen(unittest.TestCase):
 
     def setUp(self):
-        pass
+        if os.path.exists('/tmp/{}/'.format(self.id())):
+            shutil.rmtree('/tmp/{}/'.format(self.id()))
+        os.makedirs('/tmp/{}/'.format(self.id()))
+        self.code = self.code.format(testname=self.id(), wsroot=WSROOT)
+        self.tracks = tuple([i.format(testname=self.id(), wsroot=WSROOT) for i in self.tracks])
+        self.testscript = '/tmp/{}/testscript'.format(self.id())
+        open(self.testscript, 'w').write(self.code)
+        print(self.testscript)
+        os.chmod(self.testscript, os.stat(self.testscript).st_mode | stat.S_IEXEC)
 
 
-    def test_open1(self):
-#        args = argparse.Namespace(command=["/bin/cat", "%s/tests/test_open1.c" % WSROOT], verbose=3)
-        args = argparse.Namespace(command=['tests/code.py'], verbose=4)
-#        args = argparse.Namespace(command=[sys.executable, '-c', self.code], verbose=4)
+    def tearDown(self):
+        if os.path.exists('/tmp/{}/'.format(self.id())):
+            shutil.rmtree('/tmp/{}/'.format(self.id()))
+
+    def test_open(self):
+        print(self.code)
+        args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
         wisktrack.create_reciever()
-        print(wisktrack.TrackedRunner(args))
+        runner = wisktrack.TrackedRunner(args)
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]
         print('Tracked Operations:\n %s' % ('\n\t'.join(lines)))
-        print('Expectred Operations:\n %s' % ('\n\t'.join(self.tracks)))
+        print('Expected Operations:\n %s' % ('\n\t'.join(self.tracks)))
         for i in self.tracks:
             self.assertIn(i, lines)
         wisktrack.delete_reciever()
+        runner.waitforcompletion()
+        self.assertEqual(runner.retval.returncode, self.returncode)
 
 
 if __name__ == "__main__":
