@@ -811,6 +811,22 @@ static int generate_uniqueid(char *str)
 	WISK_LOG(WISK_LOG_TRACE, "UniqeID(%s)", str);
 }
 
+static int envcmp(const char *env, const char *var)
+{
+    int len;
+    len = strlen(var);
+    return (strncmp(env, var, len) == 0 && env[len] == '=');
+}
+
+static int wisk_isenv(const char *env)
+{
+	int i;
+	for(i=0; i< WISK_ENV_VARCOUNT; i++)
+		if (envcmp(env, wisk_env_vars[i]))
+			return true;
+	return false;
+}
+
 static void wisk_env_add(char *var, int *count)
 {
     char *s;
@@ -820,6 +836,8 @@ static void wisk_env_add(char *var, int *count)
         len = strlen(var)+strlen(s) + 2;
         wisk_envp[*count] = malloc(len);
         snprintf(wisk_envp[*count], len, "%s=%s", var, s);
+        if (envcmp(wisk_envp[*count], WISK_TRACKER_UUID))
+            strncpy(wisk_envp[*count]+strlen(WISK_TRACKER_UUID)+1, fs_tracker_uuid, UUID_SIZE);
         (*count)++;
     }
 }
@@ -858,13 +876,16 @@ static void  wisk_report_command()
     if (i != -1) {
       curprog[i] = '\0';
     }
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s calls %s\n", fs_tracker_puuid, fs_tracker_uuid);
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s calls \"%s\"\n", fs_tracker_puuid, fs_tracker_uuid);
     write(fs_tracker_pipe, msgbuffer, msglen);
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s command-path %s\n", fs_tracker_uuid, curprog);
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s command-path \"%s\"\n", fs_tracker_uuid, curprog);
     write(fs_tracker_pipe, msgbuffer, msglen);
     msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s command [", fs_tracker_uuid);
     for(i=0; i<saved_argc; i++)
-        msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\" ", saved_argv[i]);
+    	if (i==0)
+           msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", saved_argv[i]);
+    	else
+            msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", saved_argv[i]);
     msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
     write(fs_tracker_pipe, msgbuffer, msglen);
     msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s environment [", fs_tracker_uuid);
@@ -885,7 +906,7 @@ static void  wisk_report_commandcomplete()
 
     if (fs_tracker_pipe < 0)
     	return;
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: Completed\n", fs_tracker_uuid);
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s: Completed []\n", fs_tracker_uuid);
     write(fs_tracker_pipe, msgbuffer, msglen);
 }
 
@@ -953,16 +974,32 @@ bool fs_tracker_enabled(void)
 	return true;
 }
 
+char* ifnotabsolute(char *retbuf, const char *fname)
+{
+	char buf[PATH_MAX];
+
+	if (fname[0] == '/')
+		return (char*)fname;
+	else {
+		getcwd(buf, PATH_MAX);
+		snprintf(retbuf, PATH_MAX, "%s/%s", buf, fname);
+		return retbuf;
+	}
+}
+
+
 void wisk_report_link(const char *target, const char *linkpath)
 {
     char msgbuffer[BUFFER_SIZE];
+    char tbuf[PATH_MAX], lbuf[PATH_MAX];
     int msglen;
 
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
         WISK_LOG(WISK_LOG_TRACE, "Links %s %s", target, linkpath);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Links %s %s\n", fs_tracker_uuid,target, linkpath);
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Links [\"%s\", \"%s\"]\n",
+        		fs_tracker_uuid, ifnotabsolute(tbuf, target), ifnotabsolute(lbuf, linkpath));
         write(fs_tracker_pipe, msgbuffer, msglen);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "Links %s %s", target, linkpath);
@@ -972,13 +1009,14 @@ void wisk_report_link(const char *target, const char *linkpath)
 void wisk_report_write(const char *fname)
 {
     char msgbuffer[BUFFER_SIZE];
+    char buf[PATH_MAX];
     int msglen;
 
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
         WISK_LOG(WISK_LOG_TRACE, "Writes %s", fname);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Writes %s\n", fs_tracker_uuid, fname);
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Writes \"%s\"\n", fs_tracker_uuid, ifnotabsolute(buf, fname));
         write(fs_tracker_pipe, msgbuffer, msglen); 
     } else {
         WISK_LOG(WISK_LOG_TRACE, "Writes %s", fname);
@@ -988,13 +1026,14 @@ void wisk_report_write(const char *fname)
 void wisk_report_read(const char *fname)
 {
     char msgbuffer[BUFFER_SIZE];
+    char buf[PATH_MAX];
     int msglen;
 
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
         WISK_LOG(WISK_LOG_TRACE, "Reads %s", fname);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Reads %s\n", fs_tracker_uuid, fname);
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Reads \"%s\"\n", fs_tracker_uuid, ifnotabsolute(buf, fname));
         write(fs_tracker_pipe, msgbuffer, msglen); 
     } else {
         WISK_LOG(WISK_LOG_TRACE, "Reads %s", fname);
@@ -1004,10 +1043,11 @@ void wisk_report_read(const char *fname)
 void wisk_report_unknown(const char *fname, const char *mode)
 {
     char msgbuffer[BUFFER_SIZE];
+    char buf[PATH_MAX];
     int msglen;
 
 	if (fs_tracker_enabled() && (fs_tracker_pipe >=0)) {
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Unknown(%s) %s\n", fs_tracker_uuid, mode, fname);
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s Unknown(%s) \"%s\"\n", fs_tracker_uuid, mode, ifnotabsolute(buf, fname));
         write(fs_tracker_pipe, msgbuffer, msglen);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "Reads %s", fname);
@@ -1203,22 +1243,6 @@ int openat(int dirfd, const char *path, int flags, ...)
 /****************************************************************************
  *   EXECVE
  ***************************************************************************/
-
-static int envcmp(const char *env, const char *var)
-{
-    int len;
-    len = strlen(var);
-    return (strncmp(env, var, len) == 0 && env[len] == '=');
-}
-
-static int wisk_isenv(const char *env)
-{
-	int i;
-	for(i=0; i< WISK_ENV_VARCOUNT; i++)
-		if (envcmp(env, wisk_env_vars[i]))
-			return true;
-	return false;
-}
 
 static int wisk_getvarcount(char *const envp[])
 {

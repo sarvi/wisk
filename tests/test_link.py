@@ -23,27 +23,24 @@ sys.path.insert(0, os.path.join(WSROOT, 'src/'))
 TEMPLATE_EXESCRIPT='#!{PYTHON}\n'.format(PYTHON=sys.executable)
 
 TEMPLATE_COMMON = TEMPLATE_EXESCRIPT + '''
+import os
 '''.format(LD_PRELOAD=LD_PRELOAD)
 
 
 testcases = [
     [0, ('Writes "/tmp/{testname}/file1"',
-     'Writes "/tmp/{testname}/file2"',
-     'Reads "/tmp/{testname}/file1"',
-     'Reads "/tmp/{testname}/file2"',
-     'Reads "{wsroot}/tests/fixtures/testcat.data"'),
-     TEMPLATE_EXESCRIPT+     '''
+     'Links ["/tmp/{testname}/file1", "/tmp/{testname}/fileH1"]',
+     'Links ["/tmp/{testname}/file1", "/tmp/{testname}/fileS1"]'),
+     TEMPLATE_COMMON+     '''
 open('/tmp/{testname}/file1', 'w').close()
-open('/tmp/{testname}/file2', 'w').close()
-open('/tmp/{testname}/file1', 'r').close()
-open('/tmp/{testname}/file2', 'r').close()
-open('tests/fixtures/testcat.data', 'r').close()
+os.link('/tmp/{testname}/file1', '/tmp/{testname}/fileH1')
+os.symlink('/tmp/{testname}/file1', '/tmp/{testname}/fileS1')
 print('Complette')
      '''],
 ]
 
 @parameterized_class(('returncode', 'tracks', 'code'), testcases)
-class TestOpen(unittest.TestCase):
+class TestLink(unittest.TestCase):
 
     def setUp(self):
         if os.path.exists('/tmp/{}/'.format(self.id())):

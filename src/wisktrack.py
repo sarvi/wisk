@@ -53,11 +53,8 @@ class ProgramNode(object):
         self.uuid = uuid
         if parent is None:
             self.parent = None
-        elif parent == WISK_TRACKER_UUID:
-            self.parent = ProgramNode.progtree.setdefault(WISK_TRACKER_UUID, ProgramNode(WISK_TRACKER_UUID))
         else:
             self.parent = ProgramNode.progtree[parent]
-        self.parent =  parent
         self.children = []
         self.operations = {}
         if parent:
@@ -65,24 +62,31 @@ class ProgramNode(object):
             p.children.append(self)
         ProgramNode.progtree[uuid] = self
 
+    def __str__(self):        
+        l={
+            'UUID': self.uuid,
+            'P-UUID': self.parent.uuid if self.parent is not None else None,
+            'Operations': self.operations,
+            }
+        return json.dumps(l, indent=4)
+
     @classmethod
-    def add_operation(cls, uuid, operation, *args):
+    def add_operation(cls, uuid, operation, data):
         pn = cls.progtree[uuid]
-        op = pn.operations.setdefault(operation, list())
-        op.extend(args)
+        if operation in ['command', 'command-path', 'Completed', 'calls', 'environment']:
+            pn.operations[operation] = data
+        else:
+            op = pn.operations.setdefault(operation, list())
+            op.append(data)
 
     @classmethod        
-    def show_nodes(self, node=None):
+    def show_nodes(cls, node=None):
         if node is None:
             node = ProgramNode.progtree[WISK_TRACKER_UUID]
-        print('UUID: %s' % node.uuid)
-        print('\tParent UUID: %s' % (node.parent.uuid if node.parent is not None else None))
-        for op, val in node.operations.items():
-            print('Operation: %s' % op)
-            for i in val:
-                print('\t\t%s' % i)
-        for n in node.children:
-            n.show_nodes()
+        l =[node]
+        for n in l:
+            print('%s' % n)
+            l.extend(n.children)
         
         
 
@@ -103,7 +107,7 @@ class TrackedRunner(object):
         self.thread.daemon = True
         self.thread.start()
         return
-
+    
     def run(self):
         log.debug('Environment:\n%s', self.cmdenv)
         log.debug('Command:%s', ' '.join(self.args.command))
@@ -145,17 +149,18 @@ def read_reciever(runner, args):
 #     ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY | os.O_NONBLOCK)
     ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY)
     for l in readlineswithwait(runner, ifilefd):
-        parts = l.split()
-        uuid = parts[0].strip().strip(':')
+        parts = l.split(' ',2)
+        uuid = parts[0].strip(':')
         operation = parts[1].strip()
-        data = ' '.join(parts[2:])
-        if operation == 'environment':
-            data = json.loads(data)
-        if operation=='calls':
-            ProgramNode(l.split(' ')[2].strip(), uuid)
-        else:
-            ProgramNode.add_operation(uuid, operation, data)
+        data = parts[2]
+        data = json.loads(data)
         ofile.write('{} {} {}\n'.format(uuid, operation, data))
+        if operation=='calls':
+            ProgramNode(data, uuid)
+        elif operation == 'environment':
+            data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
+            data = dict([i.split('=',1) for i in data])
+        ProgramNode.add_operation(uuid, operation, data)
 
 def delete_reciever():    
     print('\nDeleting Recieving FIFO Pipe: %s' % (WISK_TRACKER_PIPE))
@@ -163,6 +168,7 @@ def delete_reciever():
 
 def dotrack(args):
     ''' do wisktrack of a command'''
+    ProgramNode(WISK_TRACKER_UUID)
     create_reciever()
     runner = TrackedRunner(args)
     read_reciever(runner, args)
@@ -172,7 +178,8 @@ def dotrack(args):
     print('\nTracking Complete,', end='')
     if args.trackfile:
         print(' Trackfile at %s' % args.trackfile)
-#    ProgramNode.show_nodes()
+    if args.show:
+        ProgramNode.show_nodes()
     return (runner.retval.returncode if runner.retval is not None else 0)
 
 
@@ -230,7 +237,7 @@ Example:
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", default=0,
                             help="Set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
-        parser.add_argument('-dry', '--dryrun', action='store_true', default=False, help="A dry on of the operations")
+        parser.add_argument('-show', '--show', action='store_true', default=False, help="Show Tree")
         parser.add_argument('-trackfile', '--trackfile', type=str, default=None, help="Where to output the tracking data")
 
         args, command = parser.parse_known_args()
