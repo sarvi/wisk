@@ -43,41 +43,65 @@ __date__ = env.get_reldatetime()
 __updated__ = env.get_reldatetime()
 
 
+WSROOT = None
 WISK_TRACKER_PIPE='/tmp/wisk_tracker.pipe'
 WISK_TRACKER_UUID='XXXXXXXX-XXXXXXXX-XXXXXXXX'
 
 class ProgramNode(object):
     progtree = {}
     
-    def __init__(self, uuid, parent=None):
+    def __init__(self, uuid, parent=None, **kwargs):
         self.uuid = uuid
         if parent is None:
             self.parent = None
+            self.command = None
+            self.command_path = None
+            self.environment = {}
         else:
             self.parent = ProgramNode.progtree[parent]
         self.children = []
-        self.operations = {}
+        self.operations = []
         if parent:
             p = ProgramNode.progtree[parent]
             p.children.append(self)
+        for k,v in kwargs.items():
+            setattr(self, k,v)
         ProgramNode.progtree[uuid] = self
 
     def __str__(self):        
         l={
             'UUID': self.uuid,
             'P-UUID': self.parent.uuid if self.parent is not None else None,
-            'Operations': self.operations,
+            'OPERATIONS': self.operations,
+            'COMMAND': self.command,
+            'COMMAND_PATH': self.command_path,
+            'ENVIRONMENT': self.environment,
             }
-        return json.dumps(l, indent=4)
+        wsroot= getattr(self, 'WSROOT', None)
+        if wsroot:
+            l['WSROOT'] = wsroot
+        return json.dumps(l, indent=4, sort_keys=True)
 
     @classmethod
     def add_operation(cls, uuid, operation, data):
         pn = cls.progtree[uuid]
-        if operation in ['command', 'command-path', 'Completed', 'calls', 'environment']:
-            pn.operations[operation] = data
+        if operation in ['COMMAND_PATH', 'READS', 'WRITES']:
+            data = os.path.normpath(data).replace(WSROOT+'/', '')
+        elif operation in ['LINKS']:
+            data = [os.path.normpath(i).replace(WSROOT+'/', '') for i in data]
+        if operation in ['COMMAND', 'COMMAND_PATH', 'COMPLETE', 'CALLS', 'ENVIRONMENT']:
+            setattr(pn, operation.lower(), data)
         else:
-            op = pn.operations.setdefault(operation, list())
-            op.append(data)
+            pn.operations.append((operation, data))
+
+    @classmethod
+    def clean(cls):
+        programs = ProgramNode.progtree[WISK_TRACKER_UUID].children
+        for p in programs:
+            programs.extend(p.children)
+            parent = p.parent
+            p.environment = dict(p.environment.items() - parent.environment.items())
+            
 
     @classmethod        
     def show_nodes(cls, node=None):
@@ -98,7 +122,7 @@ class TrackedRunner(object):
         log.info('Verbosity: %d', self.wisk_verbosity)
         self.cmdenv = dict(os.environ)
         self.cmdenv.update({
-            'LD_PRELOAD': os.path.join(env.INSTALL_PKG_ROOT, 'libwisktrack.so'),
+            'LD_PRELOAD': os.path.join(env.LATEST_LIB_DIR, 'libwisktrack.so'),
             'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
             'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
             'WISK_TRACKER_DEBUGLEVEL': ('%d' % (self.wisk_verbosity))})
@@ -155,9 +179,9 @@ def read_reciever(runner, args):
         data = parts[2]
         data = json.loads(data)
         ofile.write('{} {} {}\n'.format(uuid, operation, data))
-        if operation=='calls':
+        if operation=='CALLS':
             ProgramNode(data, uuid)
-        elif operation == 'environment':
+        elif operation == 'ENVIRONMENT':
             data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
             data = dict([i.split('=',1) for i in data])
         ProgramNode.add_operation(uuid, operation, data)
@@ -168,7 +192,9 @@ def delete_reciever():
 
 def dotrack(args):
     ''' do wisktrack of a command'''
-    ProgramNode(WISK_TRACKER_UUID)
+    global WSROOT
+    WSROOT = args.wsroot
+    ProgramNode(WISK_TRACKER_UUID,wsroot=args.wsroot)
     create_reciever()
     runner = TrackedRunner(args)
     read_reciever(runner, args)
@@ -178,6 +204,7 @@ def dotrack(args):
     print('\nTracking Complete,', end='')
     if args.trackfile:
         print(' Trackfile at %s' % args.trackfile)
+    ProgramNode.clean()
     if args.show:
         ProgramNode.show_nodes()
     return (runner.retval.returncode if runner.retval is not None else 0)
@@ -238,6 +265,7 @@ Example:
                             help="Set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         parser.add_argument('-show', '--show', action='store_true', default=False, help="Show Tree")
+        parser.add_argument('-wsroot', '--wsroot', type=str, default=os.getcwd(), help="Workspace Root")
         parser.add_argument('-trackfile', '--trackfile', type=str, default=None, help="Where to output the tracking data")
 
         args, command = parser.parse_known_args()

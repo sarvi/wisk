@@ -28,9 +28,9 @@ import os
 
 
 testcases = [
-    [0, ('Writes "/tmp/{testname}/file1"',
-     'Links ["/tmp/{testname}/file1", "/tmp/{testname}/fileH1"]',
-     'Links ["/tmp/{testname}/file1", "/tmp/{testname}/fileS1"]'),
+    [0, ('WRITES "/tmp/{testname}/file1"',
+     'LINKS ["/tmp/{testname}/file1", "/tmp/{testname}/fileH1"]',
+     'LINKS ["/tmp/{testname}/file1", "/tmp/{testname}/fileS1"]'),
      TEMPLATE_COMMON+     '''
 open('/tmp/{testname}/file1', 'w').close()
 os.link('/tmp/{testname}/file1', '/tmp/{testname}/fileH1')

@@ -27,11 +27,11 @@ TEMPLATE_COMMON = TEMPLATE_EXESCRIPT + '''
 
 
 testcases = [
-    [0, ('Writes "/tmp/{testname}/file1"',
-     'Writes "/tmp/{testname}/file2"',
-     'Reads "/tmp/{testname}/file1"',
-     'Reads "/tmp/{testname}/file2"',
-     'Reads "{wsroot}/tests/fixtures/testcat.data"'),
+    [0, ('WRITES "/tmp/{testname}/file1"',
+     'WRITES "/tmp/{testname}/file2"',
+     'READS "/tmp/{testname}/file1"',
+     'READS "/tmp/{testname}/file2"',
+     'READS "{wsroot}/tests/fixtures/testcat.data"'),
      TEMPLATE_EXESCRIPT+     '''
 open('/tmp/{testname}/file1', 'w').close()
 open('/tmp/{testname}/file2', 'w').close()

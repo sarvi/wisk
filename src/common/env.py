@@ -69,6 +69,7 @@ if not INSTALLED:
     INSTALL_BIN_DIR = os.path.join(INSTALL_ROOT, 'scripts')
     LATEST_INSTALL_ROOT = INSTALL_ROOT
     LATEST_BIN_DIR = INSTALL_BIN_DIR
+    LATEST_LIB_DIR = os.path.abspath(os.path.join(INSTALL_PKG_ROOT, '../src'))
 else:
     INSTALL_ROOT = os.path.normpath(os.path.join(INSTALL_PKG_ROOT, '../'))
     INSTANCE_NAME = None
@@ -79,6 +80,7 @@ else:
     INSTALL_BIN_DIR = os.path.join(INSTALL_ROOT, 'bin')
     LATEST_INSTALL_ROOT = os.path.normpath(os.path.join(INSTALL_ROOT, '../current'))
     LATEST_BIN_DIR = os.path.join(LATEST_INSTALL_ROOT, 'bin')
+    LATEST_LIB_DIR = os.path.join(LATEST_INSTALL_ROOT, 'lib')
 
 HOST_UNAME = platform.uname()
 UMASK = 0o22  # Set default umask to file permissions of 0644 and directory permissions of 0755

@@ -52,7 +52,7 @@ def arrayofstr(L):
 
 
 testcases = [
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_EXESCRIPT+'''
 import os
 os.system('/bin/touch /tmp/{testname}/file1')
@@ -62,11 +62,11 @@ os.system('/bin/touch /tmp/{testname}/file1')
      TEMPLATE_COMMON+'''
 sys.exit(ld_preload.execlpe(c_char_p(b'cat'), c_char_p(b'cat'), c_char_p(b'--help'), None, arrayofstr([None])))
      '''],
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 ld_preload.execlpe(c_char_p(b'/bin/cat'), c_char_p(b'cat'), c_char_p(b'{wsroot}/tests/fixtures/testcat.data'), None, arrayofstr([None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 ld_preload.execlpe(c_char_p(b'/bin/touch'), c_char_p(b'touch'), c_char_p(b'/tmp/{testname}/file1'), None, arrayofstr([None]))
      '''],
@@ -75,11 +75,11 @@ ld_preload.execlpe(c_char_p(b'/bin/touch'), c_char_p(b'touch'), c_char_p(b'/tmp/
      TEMPLATE_COMMON+'''
 sys.exit(ld_preload.execlp(c_char_p(b'cat'), c_char_p(b'cat'), c_char_p(b'--help'), None))
      '''],
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 ld_preload.execlp(c_char_p(b'/bin/cat'), c_char_p(b'/bin/cat'), c_char_p(b'{wsroot}/tests/fixtures/testcat.data'), None)
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 ld_preload.execlp(c_char_p(b'/bin/touch'), c_char_p(b'/bin/touch'), c_char_p(b'/tmp/{testname}/file1'), None)
      '''],
@@ -88,79 +88,79 @@ ld_preload.execlp(c_char_p(b'/bin/touch'), c_char_p(b'/bin/touch'), c_char_p(b'/
      TEMPLATE_COMMON+'''
 sys.exit(ld_preload.execl(c_char_p(b'cat'), c_char_p(b'cat'), c_char_p(b'--help'), None))
      '''],
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 ld_preload.execl(c_char_p(b'/bin/cat'), c_char_p(b'/bin/cat'), c_char_p(b'{wsroot}/tests/fixtures/testcat.data'), None)
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 ld_preload.execl(c_char_p(b'/bin/touch'), c_char_p(b'/bin/touch'), c_char_p(b'/tmp/{testname}/file1'), None)
      '''],
 
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 ld_preload.execve(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'{wsroot}/tests/fixtures/testcat.data', None]), arrayofstr([None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 ld_preload.execve(c_char_p(b'/bin/touch'), arrayofstr([b'/bin/touch', b'/tmp/{testname}/file1', None]), arrayofstr([None]))
      '''],
 
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 ld_preload.execvpe(c_char_p(b'cat'), arrayofstr([b'cat', b'{wsroot}/tests/fixtures/testcat.data', None]), arrayofstr([None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 ld_preload.execvpe(c_char_p(b'touch'), arrayofstr([b'touch', b'/tmp/{testname}/file1', None]), arrayofstr([None]))
      '''],
 
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 ld_preload.execvp(c_char_p(b'cat'), arrayofstr([b'cat', b'{wsroot}/tests/fixtures/testcat.data', None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 ld_preload.execvp(c_char_p(b'touch'), arrayofstr([b'touch', b'/tmp/{testname}/file1', None]))
      '''],
 
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'{wsroot}/tests/fixtures/testcat.data', None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 ld_preload.execv(c_char_p(b'/bin/touch'), arrayofstr([b'/bin/touch', b'/tmp/{testname}/file1', None]))
      '''],
 
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 intptr = c_int()
 ld_preload.posix_spawn(intptr, c_char_p(b'/bin/cat'), None, None, arrayofstr([b'cat', b'{wsroot}/tests/fixtures/testcat.data', None]), arrayofstr([None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 intptr = c_int()
 ld_preload.posix_spawn(intptr, c_char_p(b'/bin/touch'), None, None, arrayofstr([b'touch', b'/tmp/{testname}/file1', None]), arrayofstr([None]))
      '''],
 
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 intptr = c_int()
 ld_preload.posix_spawnp(intptr, c_char_p(b'cat'), None, None, arrayofstr([b'cat', b'{wsroot}/tests/fixtures/testcat.data', None]), arrayofstr([None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 intptr = c_int()
 ld_preload.posix_spawnp(intptr, c_char_p(b'touch'), None, None, arrayofstr([b'touch', b'/tmp/{testname}/file1', None]), arrayofstr([None]))
      '''],
 
-    [0, ('Reads "{wsroot}/tests/fixtures/testcat.data"',),
+    [0, ('READS "{wsroot}/tests/fixtures/testcat.data"',),
      TEMPLATE_COMMON+'''
 intptr = c_int()
 ld_preload.posix_spawnp(intptr, c_char_p(b'/bin/cat'), None, None, arrayofstr([b'cat', b'{wsroot}/tests/fixtures/testcat.data', None]), arrayofstr([None]))
      '''],
-    [0, ('Writes "/tmp/{testname}/file1"',),
+    [0, ('WRITES "/tmp/{testname}/file1"',),
      TEMPLATE_COMMON+'''
 intptr = c_int()
 ld_preload.posix_spawnp(intptr, c_char_p(b'/bin/touch'), None, None, arrayofstr([b'touch', b'/tmp/{testname}/file1', None]), arrayofstr([None]))
