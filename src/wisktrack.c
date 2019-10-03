@@ -926,7 +926,6 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
         strncpy(fs_tracker_puuid, "XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX", UUID_SIZE);
     }
 
-    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
     if (wisk.libc.symbols._libc_open.f) {
 	    WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
         fs_tracker_pipe = wisk.libc.symbols._libc_open.f(fs_tracker_pipe_path, O_WRONLY);
@@ -937,7 +936,6 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	if (fs_tracker_pipe < 0) {
 		WISK_LOG(WISK_LOG_ERROR, "File System Tracker Pipe %s cannot be opened for write\n", fs_tracker_pipe_path);
 	}
-    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
 	for(wisk_env_count=0, i=0; i< WISK_ENV_VARCOUNT; i++)
         wisk_env_add(wisk_env_vars[i], &wisk_env_count);
     for(i=0; i<wisk_env_count; i++) {
