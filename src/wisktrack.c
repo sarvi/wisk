@@ -889,9 +889,9 @@ static void  wisk_report_command()
 		msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s ENVIRONMENT [", fs_tracker_uuid);
 		for(; environ[i] && msglen + strlen(environ[i]) < BUFFER_SIZE-1; i++) {
 			if (first)
-				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", environ[i]);
+				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", escape(envstr, environ[i]));
 			else
-				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", environ[i]);
+				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", escape(envstr, environ[i]));
 			first=0;
 		}
 		msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");

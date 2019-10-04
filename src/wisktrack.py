@@ -100,6 +100,7 @@ class ProgramNode(object):
 
     @classmethod
     def add_operation(cls, uuid, operation, data):
+        print(uuid, operation, data)
         if uuid not in cls.progtree:
             ProgramNode(uuid)
         pn = cls.progtree[uuid]
@@ -131,29 +132,12 @@ class ProgramNode(object):
             ofile.write("%s\n" % (n))
             l.extend(n.children)
         ofile.write('Objects: %d' % len(l))
-        assert len(l) == count
+        assert len(l) == ProgramNode.count
         
-def readenoughlines(runner, ifilefd):
-    ifile=os.fdopen(ifilefd)
+def readenoughlines(ifile):
     buffer = []
-    while runner.thread.is_alive():
-        try:
-            line = ifile.readline()
-        except:
-            continue
-        if not line:
-            continue
-        if line.split(' ', 2)[1] == "COMMAND" and not line.endswith(']\n'):
-            buffer.append(line)
-        else:
-            yield line
-        break
-    print(line)
-    flags = fcntl.fcntl(ifilefd, fcntl.F_GETFL)
-    flags = flags & ~os.O_NONBLOCK
-    fcntl.fcntl(ifilefd, fcntl.F_SETFL,  flags)
     for line in ifile.readlines():
-        print('SARVI>%s' % line)
+        log.debug(line)
         if buffer:
             if line.endswith(']\n'):
                 buffer.append(line)
@@ -169,14 +153,13 @@ def readenoughlines(runner, ifilefd):
         yield ''.join(buffer)
                 
 
-def read_reciever(runner, args):
-    ofile= open(args.trackfile, 'w') if args.trackfile else sys.stdout
-#     ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY | os.O_NONBLOCK)
-    ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY)
+def clean_data(args):
+    ProgramNode(WISK_TRACKER_UUID)
+    ifile = open(args.rawfile)
     c=[]
-    for l in readenoughlines(runner, ifilefd):
+    for l in readenoughlines(ifile):
         parts = l.split(' ',2)
-        uuid = parts[0].strip(':')
+        uuid = parts[0]
         operation = parts[1].strip()
         data = parts[2]
         if operation not in "COMMAND":
@@ -184,8 +167,6 @@ def read_reciever(runner, args):
                 data = json.loads(data)
             except json.decoder.JSONDecodeError as e:
                 log.error('Error Decoding: %s', l)
-        if not args.clean:
-            ofile.write('{} {} {}\n'.format(uuid, operation, data))
         if operation=='CALLS':
             ProgramNode.getorcreate(data, uuid)
         elif operation == 'ENVIRONMENT':
@@ -195,8 +176,7 @@ def read_reciever(runner, args):
         ProgramNode.add_operation(uuid, operation, data)
         c.append(l)
     ProgramNode.clean()
-    if args.clean:
-        ProgramNode.show_nodes(ofile)
+    ProgramNode.show_nodes(open(args.trackfile, 'w'))
 
 
         
@@ -243,15 +223,17 @@ def tracked_run(args):
         return None
     return retval
 
-def clean_data(args):
-    pass
-
 def delete_reciever():    
     log.info('\nDeleting Recieving FIFO Pipe: %s', WISK_TRACKER_PIPE)
     os.unlink(WISK_TRACKER_PIPE)
 
+def doinit(args):
+    global WSROOT
+    WSROOT = args.wsroot
+
 def dotrack(args):
     ''' do wisktrack of a command'''
+    doinit(args)
     create_reciever()
     reciever = TrackerReciever(args)
     result = tracked_run(args)
@@ -259,11 +241,9 @@ def dotrack(args):
     if args.clean:
         clean_data(args)
     if args.show:
-        if args.clean:
-            pass
-        else:
-            for line in open(args.rawfile):
-                print(line)
+        filetoshow = args.trackfile if args.clean else args.rawfile
+        for line in open(filetoshow):
+            print(line, end='')
     
     return (result.returncode if result else 0)
 
