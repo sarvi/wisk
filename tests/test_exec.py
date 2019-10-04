@@ -13,6 +13,7 @@ import unittest
 import logging
 from parameterized import parameterized_class
 import wisktrack
+from testrunner import TrackedRunner
 
 
 log=logging.getLogger('tests.test_open')
@@ -190,8 +191,8 @@ class TestExec(unittest.TestCase):
     def test_exec(self):
         print(self.code)
         args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
-        wisktrack.create_reciever()        
-        runner = wisktrack.TrackedRunner(args)
+        wisktrack.create_reciever()
+        runner = TrackedRunner(args)
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]
         print('Tracked Operations:\n %s' % ('\n\t'.join(lines)))
         print('Expected Operations:\n %s' % ('\n\t'.join(self.tracks)))

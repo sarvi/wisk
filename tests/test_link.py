@@ -13,6 +13,7 @@ import unittest
 import logging
 from parameterized import parameterized_class
 import wisktrack
+from testrunner import TrackedRunner
 
 log=logging.getLogger('tests.test_open')
 wisktrack.WISK_TRACKER_VERBOSITY=4
@@ -62,7 +63,7 @@ class TestLink(unittest.TestCase):
         print(self.code)
         args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
         wisktrack.create_reciever()
-        runner = wisktrack.TrackedRunner(args)
+        runner = TrackedRunner(args)
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]
         print('Tracked Operations:\n %s' % ('\n\t'.join(lines)))
         print('Expected Operations:\n %s' % ('\n\t'.join(self.tracks)))

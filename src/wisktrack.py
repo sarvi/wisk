@@ -46,6 +46,8 @@ __updated__ = env.get_reldatetime()
 WSROOT = None
 WISK_TRACKER_PIPE='/tmp/wisk_tracker.pipe'
 WISK_TRACKER_UUID='XXXXXXXX-XXXXXXXX-XXXXXXXX'
+WISK_DEPDATA_RAW='wisk_depdata.raw'
+WISK_DEPDATA='wisk_depdata.dep'
 
 class ProgramNode(object):
     progtree = {}
@@ -86,7 +88,20 @@ class ProgramNode(object):
         return json.dumps(l, indent=4, sort_keys=True)
 
     @classmethod
+    def getorcreate(cls, uuid, parent=None, **kwargs):
+        if uuid not in cls.progtree:
+            prog = ProgramNode(uuid, parent, **kwargs)
+        else:
+            prog = ProgramNode.progtree[uuid]
+            if parent:
+                prog.parent = ProgramNode.getorcreate(parent)
+                prog.parent.children.append(prog)
+        return prog
+
+    @classmethod
     def add_operation(cls, uuid, operation, data):
+        if uuid not in cls.progtree:
+            ProgramNode(uuid)
         pn = cls.progtree[uuid]
         if operation in ['COMMAND_PATH', 'READS', 'WRITES']:
             data = os.path.normpath(data).replace(WSROOT+'/', '')
@@ -116,36 +131,88 @@ class ProgramNode(object):
             ofile.write("%s\n" % (n))
             l.extend(n.children)
         ofile.write('Objects: %d' % len(l))
+        assert len(l) == count
         
+def readenoughlines(runner, ifilefd):
+    ifile=os.fdopen(ifilefd)
+    buffer = []
+    while runner.thread.is_alive():
+        try:
+            line = ifile.readline()
+        except:
+            continue
+        if not line:
+            continue
+        if line.split(' ', 2)[1] == "COMMAND" and not line.endswith(']\n'):
+            buffer.append(line)
+        else:
+            yield line
+        break
+    print(line)
+    flags = fcntl.fcntl(ifilefd, fcntl.F_GETFL)
+    flags = flags & ~os.O_NONBLOCK
+    fcntl.fcntl(ifilefd, fcntl.F_SETFL,  flags)
+    for line in ifile.readlines():
+        print('SARVI>%s' % line)
+        if buffer:
+            if line.endswith(']\n'):
+                buffer.append(line)
+                yield ''.join(buffer)
+                buffer = []
+            else:
+                buffer.append(line)
+        elif line.split(' ', 2)[1] == "COMMAND" and not line.endswith(']\n'):
+            buffer.append(line)
+        else:
+            yield line
+    if buffer:
+        yield ''.join(buffer)
+                
+
+def read_reciever(runner, args):
+    ofile= open(args.trackfile, 'w') if args.trackfile else sys.stdout
+#     ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY | os.O_NONBLOCK)
+    ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY)
+    c=[]
+    for l in readenoughlines(runner, ifilefd):
+        parts = l.split(' ',2)
+        uuid = parts[0].strip(':')
+        operation = parts[1].strip()
+        data = parts[2]
+        if operation not in "COMMAND":
+            try:
+                data = json.loads(data)
+            except json.decoder.JSONDecodeError as e:
+                log.error('Error Decoding: %s', l)
+        if not args.clean:
+            ofile.write('{} {} {}\n'.format(uuid, operation, data))
+        if operation=='CALLS':
+            ProgramNode.getorcreate(data, uuid)
+        elif operation == 'ENVIRONMENT':
+            data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
+            data = [i.split('=',1) for i in data]
+            data = dict([(i if len(i)==2 else (i[0], '')) for i in data])
+        ProgramNode.add_operation(uuid, operation, data)
+        c.append(l)
+    ProgramNode.clean()
+    if args.clean:
+        ProgramNode.show_nodes(ofile)
+
+
         
 
-class TrackedRunner(object):
+class TrackerReciever(object):
     def __init__(self, args):
-        self.args = args
-        self.retval = None
-        self.wisk_verbosity = args.verbose + 1
-        log.info('Verbosity: %d', self.wisk_verbosity)
-        self.cmdenv = dict(os.environ)
-        self.cmdenv.update({
-            'LD_PRELOAD': os.path.join(env.LATEST_LIB_DIR, 'libwisktrack.so'),
-            'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
-            'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
-            'WISK_TRACKER_DEBUGLEVEL': ('%d' % (self.wisk_verbosity))})
+        self.rawfile = args.rawfile
         self.thread = threading.Thread(target=self.run, args=())
         self.thread.daemon = True
         self.thread.start()
         return
     
     def run(self):
-        log.debug('Environment:\n%s', self.cmdenv)
-        log.debug('Command:%s', ' '.join(self.args.command))
-        print('Running: %s'  % self.args.command)
-        try:
-            self.retval = subprocess.run(self.args.command, env=self.cmdenv)
-        except FileNotFoundError as e:
-            print(e)
-            return 255
-        return self.retval.returncode
+        print('Reading RAW Dependency from: %s'  % (self.rawfile))
+        command = '/bin/cat %s > %s' % (WISK_TRACKER_PIPE, self.rawfile)
+        return subprocess.run(command, shell=True)
     
     def waitforcompletion(self):
         self.thread.join()
@@ -157,42 +224,27 @@ def create_reciever():
     log.info('Creating Recieving FIFO Pipe: %s', WISK_TRACKER_PIPE)
     os.mkfifo(WISK_TRACKER_PIPE)
 
-def readlineswithwait(runner, ifilefd):
-    ifile=os.fdopen(ifilefd)
-    while runner.thread.is_alive():
-        try:
-            line = ifile.readline()
-        except:
-            continue
-        if line:
-            yield line
-    flags = fcntl.fcntl(ifilefd, fcntl.F_GETFL)
-    flags = flags & ~os.O_NONBLOCK
-    fcntl.fcntl(ifilefd, fcntl.F_SETFL,  flags)
-    for line in ifile.readlines():
-        yield line 
+def tracked_run(args):
+    retval = None
+    log.info('WISK Verbosity: %d', args.verbose-1)
+    cmdenv = dict(os.environ)
+    cmdenv.update({
+        'LD_PRELOAD': os.path.join(env.LATEST_LIB_DIR, 'libwisktrack.so'),
+        'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
+        'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
+        'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose-1))})
+    log.debug('Environment:\n%s', cmdenv)
+    log.debug('Command:%s', ' '.join(args.command))
+    print('Running: %s'  % (' '.join(args.command)))
+    try:
+        retval = subprocess.run(args.command, env=cmdenv)
+    except FileNotFoundError as e:
+        print(e)
+        return None
+    return retval
 
-def read_reciever(runner, args):
-    ofile= open(args.trackfile, 'w') if args.trackfile else sys.stdout
-#     ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY | os.O_NONBLOCK)
-    ifilefd = os.open(WISK_TRACKER_PIPE, os.O_RDONLY)
-    for l in readlineswithwait(runner, ifilefd):
-        parts = l.split(' ',2)
-        uuid = parts[0].strip(':')
-        operation = parts[1].strip()
-        data = parts[2]
-        data = json.loads(data)
-        if not args.clean:
-            ofile.write('{} {} {}\n'.format(uuid, operation, data))
-        if operation=='CALLS':
-            ProgramNode(data, uuid)
-        elif operation == 'ENVIRONMENT':
-            data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
-            data = dict([i.split('=',1) for i in data])
-        ProgramNode.add_operation(uuid, operation, data)
-    ProgramNode.clean()
-    if args.clean:
-        ProgramNode.show_nodes(ofile)
+def clean_data(args):
+    pass
 
 def delete_reciever():    
     log.info('\nDeleting Recieving FIFO Pipe: %s', WISK_TRACKER_PIPE)
@@ -200,20 +252,20 @@ def delete_reciever():
 
 def dotrack(args):
     ''' do wisktrack of a command'''
-    global WSROOT
-    global ROOTNODE
-    WSROOT = args.wsroot
-    ROOTNODE = ProgramNode(WISK_TRACKER_UUID,wsroot=args.wsroot)
     create_reciever()
-    runner = TrackedRunner(args)
-    read_reciever(runner, args)
+    reciever = TrackerReciever(args)
+    result = tracked_run(args)
     delete_reciever()
-    if runner.thread.is_alive():
-        runner.waitforcompletion()
-    print('\nTracking Complete,', end='')
-    if args.trackfile:
-        print(' Trackfile at %s' % args.trackfile)
-    return (runner.retval.returncode if runner.retval is not None else 0)
+    if args.clean:
+        clean_data(args)
+    if args.show:
+        if args.clean:
+            pass
+        else:
+            for line in open(args.rawfile):
+                print(line)
+    
+    return (result.returncode if result else 0)
 
 
 class CLIError(Exception):
@@ -283,14 +335,17 @@ Example:
         parser.add_argument("-v", "--verbose", dest="verbose", action="count", default=0,
                             help="Set verbosity level [default: %(default)s]")
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
+        parser.add_argument('-show', '--show', action='store_true', default=False, help="Show Depenency Data")
         parser.add_argument('-clean', '--clean', action='store_true', default=False, help="Show Cleaned Command Tree ")
         parser.add_argument('-wsroot', '--wsroot', type=str, default=os.getcwd(), help="Workspace Root")
-        parser.add_argument('-trackfile', '--trackfile', type=str, default=None, help="Where to output the tracking data")
+        parser.add_argument('-rawfile', '--rawfile', type=str, default=os.path.join(os.getcwd(), WISK_DEPDATA_RAW), help="RAW Data File")
+        parser.add_argument('-trackfile', '--trackfile', type=str, default=os.path.join(os.getcwd(), WISK_DEPDATA), help="Where to output the tracking data")
 
         args = partialparse(parser)
 
         # Setup verbose
         env.logging_setup(args.verbose)
+        # env.ENVIRONMENT['verbosity'] = 0
 
         return dotrack(args)
     except KeyboardInterrupt:

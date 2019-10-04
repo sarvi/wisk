@@ -860,7 +860,7 @@ static char* escape(char *d, char *s)
 
 static void  wisk_report_command()
 {
-    int i, msglen;
+    int i, msglen, envcount, first;
     char curprog[PATH_MAX];
     char msgbuffer[BUFFER_SIZE];
     char envstr[BUFFER_SIZE];
@@ -883,15 +883,20 @@ static void  wisk_report_command()
             msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", saved_argv[i]);
     msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
     write(fs_tracker_pipe, msgbuffer, msglen);
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s ENVIRONMENT [", fs_tracker_uuid);
-    for(i=0; environ[i]; i++)
-    	if (i==0)
-            msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", escape(envstr, environ[i]));
-    	else
-            msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", escape(envstr, environ[i]));
-    msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
-
-    write(fs_tracker_pipe, msgbuffer, msglen);
+    i=0;
+    while (environ[i]) {
+        first = 1;
+		msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s ENVIRONMENT [", fs_tracker_uuid);
+		for(; environ[i] && msglen + strlen(environ[i]) < BUFFER_SIZE-1; i++) {
+			if (first)
+				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", environ[i]);
+			else
+				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", environ[i]);
+			first=0;
+		}
+		msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
+		write(fs_tracker_pipe, msgbuffer, msglen);
+    }
 }
 
 static void  wisk_report_commandcomplete()
@@ -949,6 +954,42 @@ static void wisk_env_add(char *var, int *count)
         (*count)++;
     }
 }
+
+static int wisk_getvarcount(char *const envp[])
+{
+    int envc, i;
+
+    for (i=0, envc=1; envp[i]; i++) {
+      if (wisk_isenv(envp[i])) {
+//          WISK_LOG(WISK_LOG_TRACE, "Skipping Environment %d: %s", i, envp[i]);
+          continue;
+        }
+//      WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, envp[i]);
+      envc++;
+    }
+//    WISK_LOG(WISK_LOG_TRACE, "Var Count: %d",  envc);
+    return envc;
+}
+
+static void wisk_loadenv(char *const envp[], char *nenvp[])
+{
+    int envi=0, i;
+    uuid_t uuid;
+
+//	WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
+	for(envi=0; envi < wisk_env_count; envi++)
+		nenvp[envi] = wisk_envp[envi];
+    for (i=0; envp[i]; i++) {
+      if (wisk_isenv(envp[i]))
+          continue;
+      nenvp[envi++] = envp[i];
+    }
+    nenvp[envi++] = envp[i];
+//	for(i=0; nenvp[i]; i++) {
+//		WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
+//	}
+}
+
 
 static char *fs_tracker_pipe_getpath(void)
 {
@@ -1242,61 +1283,6 @@ int openat(int dirfd, const char *path, int flags, ...)
 /****************************************************************************
  *   EXECVE
  ***************************************************************************/
-
-static int wisk_getvarcount(char *const envp[])
-{
-    int envc, i;
-
-    for (i=0, envc=1; envp[i]; i++) {
-      if (wisk_isenv(envp[i])) {
-//          WISK_LOG(WISK_LOG_TRACE, "Skipping Environment %d: %s", i, envp[i]);
-          continue;
-        }
-//      WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, envp[i]);
-      envc++;
-    }
-//    WISK_LOG(WISK_LOG_TRACE, "Var Count: %d",  envc);
-    return envc;
-}
-
-static void wisk_generate_uuid(char *nenvp[])
-{
-	int i;
-    uuid_t uuid;
-    char *uuidstr;
-
-    for(i=0; i < wisk_env_count; i++) {
-		if (envcmp(nenvp[i], WISK_TRACKER_UUID)) {
-			uuid_generate(uuid);
-			uuid_unparse(uuid, nenvp[i] + strlen(WISK_TRACKER_UUID)+1);
-	    	WISK_LOG(WISK_LOG_TRACE, "Updating: %d - %s",  i, nenvp[i]);
-		}
-		else if (envcmp(nenvp[i], WISK_TRACKER_PUUID)) {
-			strncpy(nenvp[i] + strlen(WISK_TRACKER_PUUID)+1, fs_tracker_uuid, UUID_SIZE);
-	    	WISK_LOG(WISK_LOG_TRACE, "Updating: %d - %s",  i, nenvp[i]);
-		}
-	}
-}
-
-static void wisk_loadenv(char *const envp[], char *nenvp[])
-{
-    int envi=0, i;
-    uuid_t uuid;
-
-//	WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
-	for(envi=0; envi < wisk_env_count; envi++)
-		nenvp[envi] = wisk_envp[envi];
-//	wisk_generate_uuid(nenvp);
-    for (i=0; envp[i]; i++) {
-      if (wisk_isenv(envp[i]))
-          continue;
-      nenvp[envi++] = envp[i];
-    }
-    nenvp[envi++] = envp[i];
-//	for(i=0; nenvp[i]; i++) {
-//		WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
-//	}
-}
 
 #ifdef INTERCEPT_EXECL
 static int wisk_vexecl(const char *file, const char *arg, va_list ap, int argcount)
