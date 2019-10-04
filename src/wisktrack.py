@@ -100,7 +100,6 @@ class ProgramNode(object):
 
     @classmethod
     def add_operation(cls, uuid, operation, data):
-        print(uuid, operation, data)
         if uuid not in cls.progtree:
             ProgramNode(uuid)
         pn = cls.progtree[uuid]
@@ -108,7 +107,9 @@ class ProgramNode(object):
             data = os.path.normpath(data).replace(WSROOT+'/', '')
         elif operation in ['LINKS']:
             data = [os.path.normpath(i).replace(WSROOT+'/', '') for i in data]
-        if operation in ['COMMAND', 'COMMAND_PATH', 'COMPLETE', 'CALLS', 'ENVIRONMENT']:
+        if operation in ['ENVIRONMENT']:
+            getattr(pn, operation.lower()).update(data)
+        elif operation in ['COMMAND', 'COMMAND_PATH', 'COMPLETE', 'CALLS']:
             setattr(pn, operation.lower(), data)
         else:
             pn.operations.append((operation, data))
@@ -137,7 +138,6 @@ class ProgramNode(object):
 def readenoughlines(ifile):
     buffer = []
     for line in ifile.readlines():
-        log.debug(line)
         if buffer:
             if line.endswith(']\n'):
                 buffer.append(line)
@@ -233,11 +233,13 @@ def doinit(args):
 
 def dotrack(args):
     ''' do wisktrack of a command'''
+    result = None
     doinit(args)
-    create_reciever()
-    reciever = TrackerReciever(args)
-    result = tracked_run(args)
-    delete_reciever()
+    if args.command:
+        create_reciever()
+        reciever = TrackerReciever(args)
+        result = tracked_run(args)
+        delete_reciever()
     if args.clean:
         clean_data(args)
     if args.show:
@@ -324,8 +326,8 @@ Example:
         args = partialparse(parser)
 
         # Setup verbose
-        env.logging_setup(args.verbose)
-        # env.ENVIRONMENT['verbosity'] = 0
+        # env.logging_setup(args.verbose)
+        env.ENVIRONMENT['verbosity'] = 0
 
         return dotrack(args)
     except KeyboardInterrupt:
