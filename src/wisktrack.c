@@ -41,6 +41,7 @@
 
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/timeb.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <sys/un.h>
@@ -451,10 +452,10 @@ static void *_wisk_bind_symbol(enum wisk_lib lib, const char *fn_name)
 		exit(-1);
 	}
 
-	WISK_LOG(WISK_LOG_TRACE,
-		  "Loaded %s from %s",
-		  fn_name,
-		  wisk_str_lib(lib));
+//	WISK_LOG(WISK_LOG_TRACE,
+//		  "Loaded %s from %s",
+//		  fn_name,
+//		  wisk_str_lib(lib));
 
 	return func;
 }
@@ -779,7 +780,7 @@ void wisk_report_link(const char *target, const char *linkpath)
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
-        WISK_LOG(WISK_LOG_TRACE, "LINKS %s %s", target, linkpath);
+//        WISK_LOG(WISK_LOG_TRACE, "LINKS %s %s", target, linkpath);
         msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s LINKS [\"%s\", \"%s\"]\n",
         		fs_tracker_uuid, ifnotabsolute(tbuf, target), ifnotabsolute(lbuf, linkpath));
         write(fs_tracker_pipe, msgbuffer, msglen);
@@ -797,7 +798,7 @@ void wisk_report_write(const char *fname)
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
-        WISK_LOG(WISK_LOG_TRACE, "WRITES-- %s", fname);
+//        WISK_LOG(WISK_LOG_TRACE, "WRITES %s", fname);
         msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s WRITES \"%s\"\n", fs_tracker_uuid, ifnotabsolute(buf, fname));
         write(fs_tracker_pipe, msgbuffer, msglen);
     } else {
@@ -814,7 +815,7 @@ void wisk_report_read(const char *fname)
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
-        WISK_LOG(WISK_LOG_TRACE, "READS-- %s", fname);
+//        WISK_LOG(WISK_LOG_TRACE, "READS %s", fname);
         msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s READS \"%s\"\n", fs_tracker_uuid, ifnotabsolute(buf, fname));
         write(fs_tracker_pipe, msgbuffer, msglen);
     } else {
@@ -829,7 +830,7 @@ void wisk_report_unknown(const char *fname, const char *mode)
     int msglen;
 
 	if (fs_tracker_enabled() && (fs_tracker_pipe >=0)) {
-        WISK_LOG(WISK_LOG_TRACE, "READS-UNKNOWN %s", fname);
+//        WISK_LOG(WISK_LOG_TRACE, "READS-UNKNOWN %s", fname);
         msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s READS-UNKNOWN(%s) \"%s\"\n", fs_tracker_uuid, mode, ifnotabsolute(buf, fname));
         write(fs_tracker_pipe, msgbuffer, msglen);
     } else {
@@ -871,7 +872,12 @@ static void  wisk_report_command()
     if (i != -1) {
       curprog[i] = '\0';
     }
+    WISK_LOG(WISK_LOG_TRACE, "%s CALLS %s PID=%d PPID=%d)",fs_tracker_puuid, fs_tracker_uuid, getpid(), getppid());
     msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s CALLS \"%s\"\n", fs_tracker_puuid, fs_tracker_uuid);
+    write(fs_tracker_pipe, msgbuffer, msglen);
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s PID \"%d\"\n", fs_tracker_uuid, getpid());
+    write(fs_tracker_pipe, msgbuffer, msglen);
+    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s PPID \"%d\"\n", fs_tracker_uuid, getppid());
     write(fs_tracker_pipe, msgbuffer, msglen);
     msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMMAND_PATH \"%s\"\n", fs_tracker_uuid, curprog);
     write(fs_tracker_pipe, msgbuffer, msglen);
@@ -887,7 +893,7 @@ static void  wisk_report_command()
     while (environ[i]) {
         first = 1;
 		msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s ENVIRONMENT [", fs_tracker_uuid);
-		for(; environ[i] && msglen + strlen(environ[i]) < BUFFER_SIZE-1; i++) {
+		for(; environ[i] && msglen + strlen(environ[i]) < BUFFER_SIZE-10; i++) {
 			if (first)
 				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", escape(envstr, environ[i]));
 			else
@@ -911,17 +917,18 @@ static void  wisk_report_commandcomplete()
 }
 
 
-static int generate_uniqueid(char *str)
+static int generate_uniqueid(char *str, int millisecond)
 {
 	unsigned int i1, i2, i3, i4;
 
-	srandom(getpid());
+	srandom(millisecond);
 	i1 = random();
 	i2 = random();
+	srandom(getpid());
 	i3 = random();
 	i4 = random();
 	snprintf(str, UUID_SIZE, "%08x-%08x-%08x-%08x", i1, i2, i3, i4);
-	WISK_LOG(WISK_LOG_TRACE, "UniqeID(%s)", str);
+	WISK_LOG(WISK_LOG_TRACE, "PID: %d, UniqeID(%s), with %d", getpid(), str, millisecond);
 }
 
 static int envcmp(const char *env, const char *var)
@@ -1038,9 +1045,11 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	uuid_t uuid;
 	char *uuidstr, *puuidstr;
 	int ret, i;
+	struct timeb ctime;
 
+	ftime(&ctime);
 	wisk_mutex_lock(&fs_tracker_pipe_mutex);
-    generate_uniqueid(fs_tracker_uuid);
+    generate_uniqueid(fs_tracker_uuid, ctime.millitm);
 	uuidstr = getenv(WISK_TRACKER_UUID);
     if (uuidstr) {
         strncpy(fs_tracker_puuid, uuidstr, UUID_SIZE);
@@ -1646,7 +1655,7 @@ int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
  ***************************/
 static void wisk_thread_prepare(void)
 {
-	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_prepare: ");
+//	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_prepare: ");
 	/*
 	 * This function should only be called here!!
 	 *
@@ -1661,13 +1670,13 @@ static void wisk_thread_prepare(void)
 
 static void wisk_thread_parent(void)
 {
-	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_parent: ");
+//	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_parent: ");
 	WISK_UNLOCK_ALL;
 }
 
 static void wisk_thread_child(void)
 {
-	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_child: ");
+//	WISK_LOG(WISK_LOG_TRACE, "wisk_thread_child: ");
 	WISK_UNLOCK_ALL;
 }
 

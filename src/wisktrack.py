@@ -64,18 +64,24 @@ class ProgramNode(object):
         self.environment = {}
         self.children = []
         self.operations = []
+        self.pid = None
+        self.ppid = None
         if parent:
             p = ProgramNode.progtree[parent]
             p.children.append(self)
         for k,v in kwargs.items():
             setattr(self, k,v)
         ProgramNode.count += 1
+        if uuid in ProgramNode.progtree:
+            print(str(ProgramNode.progtree[uuid]), str(self))
         ProgramNode.progtree[uuid] = self
 
     def __str__(self):        
         l={
             'UUID': self.uuid,
             'P-UUID': self.parent.uuid if self.parent is not None else None,
+            'PID': self.pid,
+            'PPID': self.ppid,
             'OPERATIONS': self.operations,
             'COMMAND': self.command,
             'COMMAND_PATH': self.command_path,
@@ -93,9 +99,9 @@ class ProgramNode(object):
             prog = ProgramNode(uuid, parent, **kwargs)
         else:
             prog = ProgramNode.progtree[uuid]
-            if parent:
-                prog.parent = ProgramNode.getorcreate(parent)
-                prog.parent.children.append(prog)
+        if parent:
+            prog.parent = ProgramNode.getorcreate(parent)
+            prog.parent.children.append(prog)
         return prog
 
     @classmethod
@@ -109,19 +115,20 @@ class ProgramNode(object):
             data = [os.path.normpath(i).replace(WSROOT+'/', '') for i in data]
         if operation in ['ENVIRONMENT']:
             getattr(pn, operation.lower()).update(data)
-        elif operation in ['COMMAND', 'COMMAND_PATH', 'COMPLETE', 'CALLS']:
+        elif operation in ['COMMAND', 'COMMAND_PATH', 'COMPLETE', 'CALLS', 'PID', 'PPID']:
             setattr(pn, operation.lower(), data)
         else:
             pn.operations.append((operation, data))
 
-    @classmethod
-    def clean(cls):
-        programs = list(ProgramNode.progtree[WISK_TRACKER_UUID].children)
-        for p in programs:
-            programs.extend(p.children)
-            parent = p.parent
-            p.environment = dict(p.environment.items() - parent.environment.items())
-            
+#     @classmethod
+#     def clean(cls):
+#         programs = list(ProgramNode.progtree[WISK_TRACKER_UUID].children)
+#         while programs:
+#             programs.extend(p.children)
+#         while programs:
+#             p =programs.pop()
+#             parent = p.parent
+#             p.environment = dict(p.environment.items() - parent.environment.items())            
 
     @classmethod        
     def show_nodes(cls, ofile, node=None):
@@ -152,11 +159,19 @@ def readenoughlines(ifile):
     if buffer:
         yield ''.join(buffer)
                 
+def clean_environment(program=None):
+    if program is None:
+        program = ProgramNode.progtree[WISK_TRACKER_UUID]
+    for p in program.children:
+        clean_environment(p)
+        parent = p.parent
+        p.environment = dict(p.environment.items() - parent.environment.items())            
 
 def clean_data(args):
+    print('Extracting and Cleaning Data')
     ProgramNode(WISK_TRACKER_UUID)
     ifile = open(args.rawfile)
-    c=[]
+    count = 0
     for l in readenoughlines(ifile):
         parts = l.split(' ',2)
         uuid = parts[0]
@@ -166,17 +181,23 @@ def clean_data(args):
             try:
                 data = json.loads(data)
             except json.decoder.JSONDecodeError as e:
-                log.error('Error Decoding: %s', l)
+                log.error('Error Decoding: %s%s', l, e)
+                raise
         if operation=='CALLS':
-            ProgramNode.getorcreate(data, uuid)
+            ProgramNode(data, uuid)
+            count += 1
+        elif operation == 'COMMAND':
+            ProgramNode.add_operation(uuid, operation, data)
         elif operation == 'ENVIRONMENT':
             data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
             data = [i.split('=',1) for i in data]
             data = dict([(i if len(i)==2 else (i[0], '')) for i in data])
-        ProgramNode.add_operation(uuid, operation, data)
-        c.append(l)
-    ProgramNode.clean()
+            ProgramNode.add_operation(uuid, operation, data)
+        else:
+            ProgramNode.add_operation(uuid, operation, data)
+    clean_environment()
     ProgramNode.show_nodes(open(args.trackfile, 'w'))
+    
 
 
         
@@ -217,7 +238,8 @@ def tracked_run(args):
     log.debug('Command:%s', ' '.join(args.command))
     print('Running: %s'  % (' '.join(args.command)))
     try:
-        retval = subprocess.run(args.command, env=cmdenv)
+#         retval = subprocess.run(args.command, env=cmdenv)
+        retval = subprocess.run(args.command, env=cmdenv, stdout=open('stdout.log', 'w'), stderr=open('stderr.log', 'w'))
     except FileNotFoundError as e:
         print(e)
         return None
@@ -240,6 +262,7 @@ def dotrack(args):
         reciever = TrackerReciever(args)
         result = tracked_run(args)
         delete_reciever()
+        print(result)
     if args.clean:
         clean_data(args)
     if args.show:
@@ -328,6 +351,7 @@ Example:
         # Setup verbose
         # env.logging_setup(args.verbose)
         env.ENVIRONMENT['verbosity'] = 0
+        init = 0
 
         return dotrack(args)
     except KeyboardInterrupt:
