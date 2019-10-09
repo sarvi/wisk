@@ -233,13 +233,13 @@ def tracked_run(args):
         'LD_PRELOAD': os.path.join(env.LATEST_LIB_DIR, 'libwisktrack.so'),
         'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
         'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
-        'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose-1))})
+        'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose))})
     log.debug('Environment:\n%s', cmdenv)
     log.debug('Command:%s', ' '.join(args.command))
     print('Running: %s'  % (' '.join(args.command)))
     try:
-#         retval = subprocess.run(args.command, env=cmdenv)
-        retval = subprocess.run(args.command, env=cmdenv, stdout=open('stdout.log', 'w'), stderr=open('stderr.log', 'w'))
+        retval = subprocess.run(args.command, env=cmdenv)
+#         retval = subprocess.run(args.command, env=cmdenv, stdout=open('stdout.log', 'w'), stderr=open('stderr.log', 'w'))
     except FileNotFoundError as e:
         print(e)
         return None
@@ -349,9 +349,9 @@ Example:
         args = partialparse(parser)
 
         # Setup verbose
-        # env.logging_setup(args.verbose)
-        env.ENVIRONMENT['verbosity'] = 0
-        init = 0
+        env.logging_setup(args.verbose)
+        # env.ENVIRONMENT['verbosity'] = 0
+        # init = 0
 
         return dotrack(args)
     except KeyboardInterrupt:

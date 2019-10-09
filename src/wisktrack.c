@@ -61,6 +61,7 @@
 enum wisk_dbglvl_e {
 	WISK_LOG_ERROR = 0,
 	WISK_LOG_WARN,
+	WISK_LOG_INFO,
 	WISK_LOG_DEBUG,
 	WISK_LOG_TRACE
 };
@@ -223,6 +224,9 @@ static void wisk_log(enum wisk_dbglvl_e dbglvl,
 			break;
 		case WISK_LOG_WARN:
 			prefix = "WISK_WARN";
+			break;
+		case WISK_LOG_INFO:
+			prefix = "WISK_INFO";
 			break;
 		case WISK_LOG_DEBUG:
 			prefix = "WISK_DEBUG";
@@ -858,11 +862,63 @@ static char* escape(char *d, char *s)
 	return  rv;
 }
 
+static int wisk_report_stringwithcontinuation(char *msgbuffer, int msglen, char const *varname)
+{
+	if (msglen > 0 && msglen < BUFFER_SIZE-10)
+		return msglen;
+	if (msglen) {
+//		assert(msgbuffer[msglen] == '\0');
+		msgbuffer[msglen] = '\n';
+		msglen++;
+		msgbuffer[msglen] = '\0';
+//	    WISK_LOG(WISK_LOG_TRACE, "Continuation: %.100s", msgbuffer);
+	    write(fs_tracker_pipe, msgbuffer, msglen);
+	}
+    msgbuffer[0] = '\0';
+    return snprintf(msgbuffer, BUFFER_SIZE, "%s %s %c", fs_tracker_uuid, varname, (msglen ? '*' : '['))+1;
+}
+
+static wisk_report_stringlist(char *msgbuffer, char const *varname, char *listp[])
+{
+	char *c;
+	int idx, stlen, prlen, stleft, stidx;
+	int msglen = 0;
+
+	msglen = wisk_report_stringwithcontinuation(msgbuffer, msglen, varname);
+//    WISK_LOG(WISK_LOG_TRACE, "%s", msgbuffer);
+	for(idx=0; listp[idx]; idx++) {
+//	    WISK_LOG(WISK_LOG_TRACE, "%d: %5d, %.50s", idx, strlen(listp[idx]), listp[idx]);
+		if (idx > 0) {
+			strncpy(msgbuffer+msglen-1, ", ", 3);
+			msglen += 2;
+		}
+		strncpy(msgbuffer+msglen-1, "\"", 2);
+		msglen += 1;
+//	    WISK_LOG(WISK_LOG_TRACE, ">>1: %s", msgbuffer);
+		stlen = strlen(listp[idx]);
+		for(c=listp[idx]; *c; c++, msglen++){
+			msgbuffer[msglen-1]=*c;
+			if (msglen < BUFFER_SIZE-10)
+				continue;
+			msgbuffer[msglen]='\0';
+//		    WISK_LOG(WISK_LOG_TRACE, ">>2: %s", msgbuffer);
+			msglen = wisk_report_stringwithcontinuation(msgbuffer, msglen, varname)-1;
+//			WISK_LOG(WISK_LOG_TRACE, ">>3 Left: %s", c);
+		}
+//	    WISK_LOG(WISK_LOG_TRACE, ">>4: %s", msgbuffer);
+		strncpy(msgbuffer+msglen-1, "\"", 2);
+		msglen += 1;
+	}
+	msglen += snprintf(msgbuffer+msglen-1, BUFFER_SIZE-msglen, "]\n");
+//    WISK_LOG(WISK_LOG_TRACE, "Final: %s", msgbuffer);
+	write(fs_tracker_pipe, msgbuffer, msglen-1);
+}
 
 static void  wisk_report_command()
 {
-    int i, msglen, envcount, first;
+    int i, msglen, envcount, count;
     char curprog[PATH_MAX];
+	char curpath[PATH_MAX];
     char msgbuffer[BUFFER_SIZE];
     char envstr[BUFFER_SIZE];
 
@@ -879,30 +935,24 @@ static void  wisk_report_command()
     write(fs_tracker_pipe, msgbuffer, msglen);
     msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s PPID \"%d\"\n", fs_tracker_uuid, getppid());
     write(fs_tracker_pipe, msgbuffer, msglen);
+	getcwd(curpath, PATH_MAX);
+	msglen = snprintf(msgbuffer, PATH_MAX, "%s WORKING_DIRECTORY \"%s\"\n", fs_tracker_uuid, curpath);
+    write(fs_tracker_pipe, msgbuffer, msglen);
     msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMMAND_PATH \"%s\"\n", fs_tracker_uuid, curprog);
     write(fs_tracker_pipe, msgbuffer, msglen);
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMMAND [", fs_tracker_uuid);
-    for(i=0; i<saved_argc; i++)
-    	if (i==0)
-           msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", saved_argv[i]);
-    	else
-            msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", saved_argv[i]);
-    msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
-    write(fs_tracker_pipe, msgbuffer, msglen);
-    i=0;
-    while (environ[i]) {
-        first = 1;
-		msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s ENVIRONMENT [", fs_tracker_uuid);
-		for(; environ[i] && msglen + strlen(environ[i]) < BUFFER_SIZE-10; i++) {
-			if (first)
-				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "\"%s\"", escape(envstr, environ[i]));
-			else
-				msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, ", \"%s\"", escape(envstr, environ[i]));
-			first=0;
-		}
-		msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen, "]\n");
-		write(fs_tracker_pipe, msgbuffer, msglen);
-    }
+
+    wisk_report_stringlist(msgbuffer, "COMMAND", saved_argv);
+//    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMMAND [", fs_tracker_uuid);
+//    for(i=0; i<saved_argc; i++)
+//    	if (i==0)
+//           msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen-1, "\"%s\"", saved_argv[i]);
+//    	else
+//            msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen-1, ", \"%s\"", saved_argv[i]);
+//
+//    msglen += snprintf(msgbuffer+msglen, BUFFER_SIZE-msglen-1, "]\n");
+//    write(fs_tracker_pipe, msgbuffer, msglen);
+//    wisk_report_stringlist(msgbuffer, "COMMAND", saved_argv)
+    wisk_report_stringlist(msgbuffer, "ENVIRONMENT", environ);
 }
 
 static void  wisk_report_commandcomplete()
