@@ -67,9 +67,10 @@ if not INSTALLED:
     INSTANCE_NAME = os.path.basename(INSTALL_ROOT)
     CONFIG_DIR = os.path.abspath(os.path.join(INSTALL_PKG_ROOT, '../config'))
     INSTALL_BIN_DIR = os.path.join(INSTALL_ROOT, 'scripts')
+    INSTALL_LIB_DIR = os.path.join(INSTALL_ROOT, 'src/lib')
     LATEST_INSTALL_ROOT = INSTALL_ROOT
     LATEST_BIN_DIR = INSTALL_BIN_DIR
-    LATEST_LIB_DIR = os.path.abspath(os.path.join(INSTALL_PKG_ROOT, '../src'))
+    LATEST_LIB_DIR = os.path.abspath(os.path.join(INSTALL_PKG_ROOT, '../src/lib'))
 else:
     INSTALL_ROOT = os.path.normpath(os.path.join(INSTALL_PKG_ROOT, '../'))
     INSTANCE_NAME = None
@@ -78,6 +79,7 @@ else:
     INSTALL_ROOT = os.path.normpath(os.path.join(INSTALL_ROOT, '../'))
     CONFIG_DIR = os.path.abspath(os.path.join(INSTALL_ROOT, 'var/config'))
     INSTALL_BIN_DIR = os.path.join(INSTALL_ROOT, 'bin')
+    INSTALL_LIB_DIR = os.path.join(INSTALL_ROOT, 'lib')
     LATEST_INSTALL_ROOT = os.path.normpath(os.path.join(INSTALL_ROOT, '../current'))
     LATEST_BIN_DIR = os.path.join(LATEST_INSTALL_ROOT, 'bin')
     LATEST_LIB_DIR = os.path.join(LATEST_INSTALL_ROOT, 'lib')

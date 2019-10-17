@@ -16,7 +16,6 @@ from __future__ import print_function
 import os
 import sys
 import uuid
-import time
 import fcntl
 import threading
 import traceback
@@ -44,6 +43,7 @@ __updated__ = env.get_reldatetime()
 
 
 WSROOT = None
+COMMAND_SEPARATOR='---'
 WISK_TRACKER_PIPE='/tmp/wisk_tracker.pipe'
 WISK_TRACKER_UUID='XXXXXXXX-XXXXXXXX-XXXXXXXX'
 WISK_DEPDATA_RAW='wisk_depdata.raw'
@@ -229,8 +229,12 @@ def tracked_run(args):
     retval = None
     log.info('WISK Verbosity: %d', args.verbose-1)
     cmdenv = dict(os.environ)
+    log.debug('LATEST_LIB_DIR: %s', env.LATEST_LIB_DIR)
     cmdenv.update({
-        'LD_PRELOAD': os.path.join(env.LATEST_LIB_DIR, 'libwisktrack.so'),
+        'LD_LIBRARY_PATH': ':'.join(['', os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib32'),
+                                     os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib64')]),
+#        'LD_LIBRARY_PATH': ':'.join([os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib32')]),
+        'LD_PRELOAD': 'libwisktrack.so',
         'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
         'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
         'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose))})
@@ -245,7 +249,8 @@ def tracked_run(args):
         return None
     return retval
 
-def delete_reciever():    
+def delete_reciever(reciever):    
+    reciever.waitforcompletion()
     log.info('\nDeleting Recieving FIFO Pipe: %s', WISK_TRACKER_PIPE)
     os.unlink(WISK_TRACKER_PIPE)
 
@@ -261,7 +266,7 @@ def dotrack(args):
         create_reciever()
         reciever = TrackerReciever(args)
         result = tracked_run(args)
-        delete_reciever()
+        delete_reciever(reciever)
         print(result)
     if args.clean:
         clean_data(args)
@@ -288,13 +293,13 @@ class CLIError(Exception):
 
 def partialparse(parser):
     ''' Parse args until first unknown '''
-    command = []
-    idx = len(sys.argv)
-    args, command = parser.parse_known_args(sys.argv[1:idx])
-    while command:
-        idx -= 1
-        args, command = parser.parse_known_args(sys.argv[1:idx])
-    args.command = sys.argv[idx:]
+    if COMMAND_SEPARATOR in sys.argv:
+        idx = sys.argv.index(COMMAND_SEPARATOR)
+    else:
+        idx = len(sys.argv)
+    args = parser.parse_args(sys.argv[1:idx])
+    args.command = sys.argv[idx+1:]
+    log.debug('Args & Command: %s', args)
     return args
         
 
