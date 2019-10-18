@@ -1,6 +1,11 @@
 
-
+ifeq (,$(wildcard /router/bin/gcc.c4.9.3-p0))
+CXX=/router/bin/gcc.c4.7.0-p3
+else
 CXX=/router/bin/gcc.c4.9.3-p0
+endif
+$(info "CXX=${CXX}")
+
 INSTALLDIR = ../binaries
 
 .PHONY: all

@@ -1,0 +1,11 @@
+html2text==2019.8.11
+kafka-python==1.4.6
+nltk==3.4.5
+nose==1.3.7
+parameterized==0.7.0
+parametrized==0.1
+psutil==5.6.3
+python-dateutil==2.8.0
+six==1.12.0
+--extra-index-url https://engci-maven.cisco.com/artifactory/api/pypi/xflow-pypi/simple
+dcc-exporter==0.0.5

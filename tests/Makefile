@@ -4,7 +4,12 @@
 SRCS = test_exec.c
 PROGS = $(patsubst %.c,%.testbin,$(SRCS))
 
+ifeq (,$(wildcard /router/bin/gcc.c4.9.3-p0))
+CXX=/router/bin/gcc.c4.7.0-p3
+else
 CXX=/router/bin/gcc.c4.9.3-p0
+endif
+$(info "CXX=${CXX}")
 SCRIPTDIR = ../scripts
 INSTALLDIR = ../testdir
 TRACKER_PIPE = /tmp/tracker.pipe
