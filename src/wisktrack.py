@@ -44,7 +44,7 @@ __updated__ = env.get_reldatetime()
 
 WSROOT = None
 COMMAND_SEPARATOR='---'
-WISK_TRACKER_PIPE='/tmp/wisk_tracker.pipe'
+WISK_TRACKER_PIPE=None
 WISK_TRACKER_UUID='XXXXXXXX-XXXXXXXX-XXXXXXXX'
 WISK_DEPDATA_RAW='wisk_depdata.raw'
 WISK_DEPDATA='wisk_depdata.dep'
@@ -293,6 +293,7 @@ class CLIError(Exception):
 
 def partialparse(parser):
     ''' Parse args until first unknown '''
+    global WISK_TRACKER_PIPE
     if COMMAND_SEPARATOR in sys.argv:
         idx = sys.argv.index(COMMAND_SEPARATOR)
     else:
@@ -300,6 +301,7 @@ def partialparse(parser):
     args = parser.parse_args(sys.argv[1:idx])
     args.command = sys.argv[idx+1:]
     log.debug('Args & Command: %s', args)
+    WISK_TRACKER_PIPE=("%s/wisk_tracker.pipe" % args.wsroot)
     return args
         
 
