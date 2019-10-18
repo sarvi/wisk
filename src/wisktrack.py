@@ -238,6 +238,8 @@ def tracked_run(args):
         'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
         'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
         'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose))})
+    if args.verbose > 4:
+        cmdenv.update({'LD_DEBUG': 'all'})
     log.debug('Environment:\n%s', cmdenv)
     log.debug('Command:%s', ' '.join(args.command))
     print('Running: %s'  % (' '.join(args.command)))

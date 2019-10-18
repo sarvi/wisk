@@ -1097,6 +1097,7 @@ static void wisk_loadenv(char *const envp[], char *nenvp[], char *ld_library_pat
       else if (envcmp(wisk_envp[envi], "LD_PRELOAD")) {
 		nenvp[envi] = ld_preload;
         wisk_ld_preload = wisk_envp[envi];
+        wisk_path_append(ld_preload, wisk_ld_preload, LD_PRELOAD_SEPARATOR);
       }
       else
 		nenvp[envi] = wisk_envp[envi];
@@ -1115,8 +1116,8 @@ static void wisk_loadenv(char *const envp[], char *nenvp[], char *ld_library_pat
     }
     if (wisk_ld_path) 
         wisk_path_append(ld_library_path, wisk_ld_path, LD_LIBRARY_PATH_SEPARATOR);
-    if (wisk_ld_preload) 
-        wisk_path_append(ld_preload, wisk_ld_preload, LD_PRELOAD_SEPARATOR);
+//    if (wisk_ld_preload) 
+//        wisk_path_append(ld_preload, wisk_ld_preload, LD_PRELOAD_SEPARATOR);
     nenvp[envi++] = envp[i];
 //	for(i=0; nenvp[i]; i++) {
 //		WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
