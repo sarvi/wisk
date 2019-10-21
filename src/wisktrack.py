@@ -105,15 +105,39 @@ class ProgramNode(object):
         return prog
 
     @classmethod
-    def add_operation(cls, uuid, operation, data):
+    def add_operation(cls, uuid, operation, data, buffer=False):
         if uuid not in cls.progtree:
             ProgramNode(uuid)
         pn = cls.progtree[uuid]
+        buffer_name = '_'+operation.lower()+'_buffer'
+        opbuffer = getattr(pn, buffer_name, '')
+        if opbuffer:
+            opbuffer = opbuffer[:-1] + data[1:]
+        else:
+            opbuffer = opbuffer + data
+        if (operation in ['ENVIRONMENT', 'COMMAND'] and not data.endswith(']\n')) \
+            or (operation not in ['ENVIRONMENT', 'COMMAND'] and not data.endswith('"\n')):
+            setattr(pn, buffer_name, opbuffer)
+            return
+        data = opbuffer
+        setattr(pn, buffer_name, '')
+        try:
+            data = json.loads(opbuffer)
+        except json.decoder.JSONDecodeError as e:
+            log.error('Error Decoding: %s%s', data, e)
+            column = re.search(re.compile(r'line 1 column (?P<column>[0-9]+) '), str(e)).group('column')
+            log.error('Column: %s', column)
+            column = int(column)
+            log.error("Error at string: %s'%s'%s", data[column-10:column-1], data[column-1], data[column:])
+            raise
         if operation in ['COMMAND_PATH', 'READS', 'WRITES']:
             data = os.path.normpath(data).replace(WSROOT+'/', '')
         elif operation in ['LINKS']:
             data = [os.path.normpath(i).replace(WSROOT+'/', '') for i in data]
         if operation in ['ENVIRONMENT']:
+            data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
+            data = [i.split('=',1) for i in data]
+            data = dict([(i if len(i)==2 else (i[0], '')) for i in data])
             getattr(pn, operation.lower()).update(data)
         elif operation in ['COMMAND', 'COMMAND_PATH', 'COMPLETE', 'CALLS', 'PID', 'PPID']:
             setattr(pn, operation.lower(), data)
@@ -142,23 +166,6 @@ class ProgramNode(object):
         ofile.write('Objects: %d' % len(l))
         assert len(l) == ProgramNode.count
         
-def readenoughlines(ifile):
-    buffer = []
-    for line in ifile.readlines():
-        if buffer:
-            if line.endswith(']\n'):
-                buffer.append(line)
-                yield ''.join(buffer)
-                buffer = []
-            else:
-                buffer.append(line)
-        elif line.split(' ', 2)[1] == "COMMAND" and not line.endswith(']\n'):
-            buffer.append(line)
-        else:
-            yield line
-    if buffer:
-        yield ''.join(buffer)
-                
 def clean_environment(program=None):
     if program is None:
         program = ProgramNode.progtree[WISK_TRACKER_UUID]
@@ -172,27 +179,16 @@ def clean_data(args):
     ProgramNode(WISK_TRACKER_UUID)
     ifile = open(args.rawfile)
     count = 0
-    for l in readenoughlines(ifile):
+    for l in ifile.readlines():
+        log.debug('(%s)', l)
         parts = l.split(' ',2)
         uuid = parts[0]
         operation = parts[1].strip()
         data = parts[2]
-        if operation not in "COMMAND":
-            try:
-                data = json.loads(data)
-            except json.decoder.JSONDecodeError as e:
-                log.error('Error Decoding: %s%s', l, e)
-                raise
+        log.debug('(%s)', data)
         if operation=='CALLS':
-            ProgramNode(data, uuid)
+            ProgramNode(json.loads(data), uuid)
             count += 1
-        elif operation == 'COMMAND':
-            ProgramNode.add_operation(uuid, operation, data)
-        elif operation == 'ENVIRONMENT':
-            data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
-            data = [i.split('=',1) for i in data]
-            data = dict([(i if len(i)==2 else (i[0], '')) for i in data])
-            ProgramNode.add_operation(uuid, operation, data)
         else:
             ProgramNode.add_operation(uuid, operation, data)
     clean_environment()
