@@ -219,6 +219,9 @@ class TrackerReciever(object):
         self.thread.join()
 
 def create_reciever():
+    global WISK_TRACKER_PIPE
+    if WISK_TRACKER_PIPE is None:
+        WISK_TRACKER_PIPE="/tmp/wisk_tracker.pipe"
     if os.path.exists(WISK_TRACKER_PIPE):
         os.unlink(WISK_TRACKER_PIPE)
     log.info("WISK PID: %d", os.getpid())

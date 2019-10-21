@@ -19,7 +19,7 @@ from testrunner import TrackedRunner
 log=logging.getLogger('tests.test_open')
 wisktrack.WISK_TRACKER_VERBOSITY=4
 WSROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
-LD_PRELOAD = os.path.join(WSROOT, 'src/libwisktrack.so')
+LD_PRELOAD = 'libwisktrack.so'
 sys.path.insert(0, os.path.join(WSROOT, 'src/'))
 
 if False:
@@ -198,8 +198,8 @@ class TestExec(unittest.TestCase):
         print('Expected Operations:\n %s' % ('\n\t'.join(self.tracks)))
         for i in self.tracks:
             self.assertIn(i, lines)
-        wisktrack.delete_reciever()
-        runner.waitforcompletion()
+        wisktrack.delete_reciever(runner)
+        # runner.waitforcompletion()
         self.assertEqual(runner.retval.returncode, self.returncode)
 
 

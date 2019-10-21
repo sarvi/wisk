@@ -18,7 +18,10 @@ class TrackedRunner(object):
         log.info('Verbosity: %d', self.wisk_verbosity)
         self.cmdenv = dict(os.environ)
         self.cmdenv.update({
-            'LD_PRELOAD': os.path.join(env.LATEST_LIB_DIR, 'libwisktrack.so'),
+            'LD_LIBRARY_PATH': ':'.join(['', os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib32'),
+                                     os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib64')]),
+#            'LD_LIBRARY_PATH': ':'.join([os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib32')]),
+            'LD_PRELOAD': 'libwisktrack.so',
             'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
             'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
             'WISK_TRACKER_DEBUGLEVEL': ('%d' % (self.wisk_verbosity))})

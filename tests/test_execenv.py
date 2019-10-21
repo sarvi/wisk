@@ -19,7 +19,7 @@ from testrunner import TrackedRunner
 log=logging.getLogger('tests.test_open')
 wisktrack.WISK_TRACKER_VERBOSITY=4
 WSROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
-LD_PRELOAD = os.path.join(WSROOT, 'src/libwisktrack.so')
+LD_PRELOAD = os.path.join(WSROOT, 'src/lib64/libwisktrack.so')
 sys.path.insert(0, os.path.join(WSROOT, 'src/'))
 
 if False:
@@ -74,7 +74,7 @@ sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--he
          'ENVIRONMENT *", "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3836+'X'
+os.environ["LARGEVAR"] = '1'*3775+'X'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
@@ -84,7 +84,7 @@ sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--he
          '*1", "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3836+'X'+'1'
+os.environ["LARGEVAR"] = '1'*3775+'X'+'1'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
@@ -95,7 +95,17 @@ sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--he
          ),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*(3836 + 4039)
+os.environ["LARGEVAR"] = '1'*(3775 + 4039)
+os.environ["ZLASTVAR"] = "END"
+
+sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
+     '''],
+    [0, ('"QUOTEDVALUE=something \\"quoted value\\" "',
+         '"ZLASTVAR=END"',
+         ),
+     TEMPLATE_COMMON+'''
+os.environ.clear()
+os.environ["QUOTEDVALUE"] = 'something "quoted value" '
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
@@ -131,9 +141,10 @@ class TestExecEnv(unittest.TestCase):
         print('Tracked Operations:\n\t%s' % ('\n\t'.join(lines)))
         print('Expected Operations:\n\t%s' % ('\n\t'.join(self.tracks)))
         for i in self.tracks:
+            print('Asserting: %s' % i)
             self.assertTrue([j for j in lines if i in j])
-        wisktrack.delete_reciever()
-        runner.waitforcompletion()
+        wisktrack.delete_reciever(runner)
+        # runner.waitforcompletion()
         self.assertEqual(runner.retval.returncode, self.returncode)
 
 

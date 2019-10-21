@@ -850,13 +850,18 @@ static char* escape(char *d, char *s)
 	char *rv;
 	for(rv=d;*s;s++, d++) {
 		switch (*s) {
+        case '"':
+            *d='\\';
+            d++;
+            break;
 		case '\\':
 			*d='\\';
 			d++;
-			*d='\\';
-			d++;
-			*d='\\';
-			d++;
+//			*d='\\';
+//			d++;
+//			*d='\\';
+//			d++;
+            break;
 		}
 		*d = *s;
 	}
@@ -886,6 +891,7 @@ static wisk_report_stringlist(char *msgbuffer, char const *varname, char *listp[
 	char *c;
 	int idx, stlen, prlen, stleft, stidx;
 	int msglen = 0;
+    char escaped[BUFFER_SIZE*10];
 
 	msglen = wisk_report_stringwithcontinuation(msgbuffer, msglen, varname);
 //    WISK_LOG(WISK_LOG_TRACE, "%s", msgbuffer);
@@ -898,8 +904,10 @@ static wisk_report_stringlist(char *msgbuffer, char const *varname, char *listp[
 		strncpy(msgbuffer+msglen-1, "\"", 2);
 		msglen += 1;
 //	    WISK_LOG(WISK_LOG_TRACE, ">>1: %s", msgbuffer);
-		stlen = strlen(listp[idx]);
-		for(c=listp[idx]; *c; c++, msglen++){
+        escape(escaped, listp[idx]);
+//        strcpy(escaped, listp[idx]);
+		stlen = strlen(escaped);
+		for(c=escaped; *c; c++, msglen++){
 			msgbuffer[msglen-1]=*c;
 			if (msglen < BUFFER_SIZE-10)
 				continue;

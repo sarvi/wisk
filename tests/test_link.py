@@ -69,8 +69,8 @@ class TestLink(unittest.TestCase):
         print('Expected Operations:\n %s' % ('\n\t'.join(self.tracks)))
         for i in self.tracks:
             self.assertIn(i, lines)
-        wisktrack.delete_reciever()
-        runner.waitforcompletion()
+        wisktrack.delete_reciever(runner)
+        # runner.waitforcompletion()
         self.assertEqual(runner.retval.returncode, self.returncode)
 
 
