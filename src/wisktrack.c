@@ -1285,7 +1285,10 @@ bool fs_tracker_enabled(void)
 #ifdef INTERCEPT_FOPEN
 static FILE *wisk_fopen(const char *name, const char *mode)
 {
+	FILE *fp;
     WISK_LOG(WISK_LOG_TRACE, "wisk_fopen(%s, %s)", name, mode);
+    fp = libc_fopen(name, mode);
+    if (fp == NULL) return fp;
     if ((mode[0] == 'w') || (mode[0] == 'a')) {
         wisk_report_write(name);
         if (mode[1] == '+')
@@ -1297,7 +1300,7 @@ static FILE *wisk_fopen(const char *name, const char *mode)
     } else {
         wisk_report_unknown(name, mode);
     }
-	return libc_fopen(name, mode);
+	return fp;
 }
 
 FILE *fopen(const char *name, const char *mode)
@@ -1316,8 +1319,9 @@ FILE *fopen(const char *name, const char *mode)
 static FILE *wisk_fopen64(const char *name, const char *mode)
 {
 	FILE *fp;
-
     WISK_LOG(WISK_LOG_TRACE, "wisk_fopen64(%s, %s)", name, mode);
+	fp = libc_fopen64(name, mode);
+	if (fp == NULL) return fp;
     if ((mode[0] == 'w') || (mode[0] == 'a')) {
         wisk_report_write(name);
         if (mode[1] == '+')
@@ -1329,11 +1333,6 @@ static FILE *wisk_fopen64(const char *name, const char *mode)
     } else {
         wisk_report_unknown(name, mode);
     }
-	fp = libc_fopen64(name, mode);
-	if (fp != NULL) {
-		int fd = fileno(fp);
-	}
-
 	return fp;
 }
 
@@ -1351,7 +1350,10 @@ FILE *fopen64(const char *name, const char *mode)
 #ifdef INTERCEPT_OPEN
 static int wisk_vopen(const char *pathname, int flags, va_list ap)
 {
+    int fd;
     WISK_LOG(WISK_LOG_TRACE, "wisk_vopen(%s, %d)", pathname, flags);
+	fd = libc_vopen(pathname, flags, ap);
+    if (fd == -1) return fd;
     if ((flags & O_WRONLY) && (flags & O_RDONLY)) {
         wisk_report_read(pathname);
         wisk_report_write(pathname);
@@ -1362,7 +1364,7 @@ static int wisk_vopen(const char *pathname, int flags, va_list ap)
     } else {
         wisk_report_read(pathname);
     }
-	return libc_vopen(pathname, flags, ap);
+	return fd;
 }
 
 int open(const char *pathname, int flags, ...)
@@ -1390,6 +1392,8 @@ static int wisk_vopen64(const char *pathname, int flags, va_list ap)
 	int ret;
 
     WISK_LOG(WISK_LOG_TRACE, "wisk_vopen64(%s, %d)", pathname, flags);
+	ret = libc_vopen64(pathname, flags, ap);
+    if (ret == -1) return ret;
     if ((flags & O_WRONLY) && (flags & O_RDONLY)) {
         wisk_report_read(pathname);
         wisk_report_write(pathname);
@@ -1400,15 +1404,6 @@ static int wisk_vopen64(const char *pathname, int flags, va_list ap)
     } else {
         wisk_report_read(pathname);
     }
-	ret = libc_vopen64(pathname, flags, ap);
-	if (ret != -1) {
-		/*
-		 * There are methods for closing descriptors (libc-internal code
-		 * paths, direct syscalls) which close descriptors in ways that
-		 * we can't intercept, so try to recover when we notice that
-		 * that's happened
-		 */
-	}
 	return ret;
 }
 
@@ -1438,15 +1433,17 @@ static int wisk_vopenat(int dirfd, const char *path, int flags, va_list ap)
 
     WISK_LOG(WISK_LOG_TRACE, "wisk_vopenat(%d, %s, %d)", dirfd, path, flags);
 	ret = libc_vopenat(dirfd, path, flags, ap);
-	if (ret != -1) {
-		/*
-		 * There are methods for closing descriptors (libc-internal code
-		 * paths, direct syscalls) which close descriptors in ways that
-		 * we can't intercept, so try to recover when we notice that
-		 * that's happened
-		 */
-	}
-
+	if (ret == -1) return ret;
+    if ((flags & O_WRONLY) && (flags & O_RDONLY)) {
+        wisk_report_read(path);
+        wisk_report_write(path);
+    } else if (flags & O_WRONLY) {
+        wisk_report_write(path);
+    } else if (flags & O_RDONLY) {
+        wisk_report_read(path);
+    } else {
+        wisk_report_read(path);
+    }
 	return ret;
 }
 
