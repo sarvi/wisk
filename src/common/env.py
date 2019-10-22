@@ -386,132 +386,137 @@ else:
             return sys.exc_info()[2].tb_frame.f_back
 
 
-_SRCFILE = os.path.normcase(currentframe.__code__.co_filename)  # pylint: disable=locally-disabled, no-member
+# _SRCFILE = os.path.normcase(currentframe.__code__.co_filename)  # pylint: disable=locally-disabled, no-member
+# 
+# 
+# def findcaller():
+#     """
+#     Find the stack frame of the caller so that we can note the source
+#     file name, line number and function name.
+#     """
+#     f = currentframe()
+#     # On some versions of IronPython, currentframe() returns None if
+#     # IronPython isn't run with -X:Frames.
+#     if f is not None:
+#         f = f.f_back
+#     rv = "(unknown file)", 0, "(unknown function)"
+#     while hasattr(f, "f_code"):
+#         code = f.f_code
+#         filename = os.path.normcase(code.co_filename)
+#         if filename != _SRCFILE:
+#             f = f.f_back
+#             continue
+#         if f.f_back is None or not hasattr(f.f_back, "f_code"):
+#             rv = (code.co_filename, f.f_lineno, '*%s*' % code.co_name)
+#         else:
+#             f = f.f_back
+#             code = f.f_code
+#             rv = (code.co_filename, f.f_lineno, code.co_name)
+#         break
+#     return rv
+# 
+# 
+# def genemitmethod(console, origemit):
+#     ''' generate emit method for handlers '''
+# 
+#     def emitmethod(self, record):
+#         ''' emit method for handlers '''
+#         try:
+#             thr = self.threads.setdefault(record.thread, dict(isprint=False, levelno=None, record=None))
+#             tisprint = thr.get('isprint')
+#             tlevelno = thr.get('levelno')
+#             trecord = thr.get('record')
+#             isprint = getattr(record, 'isprint', False)
+#             if tlevelno != record.levelno or tisprint != isprint:
+#                 trecord = thr.get('record')
+#                 if trecord:
+#                     origemit(self, trecord)
+#                     thr['record'] = None
+#             thr['isprint'] = isprint
+#             thr['levelno'] = record.levelno
+#             if not isprint:
+#                 return origemit(self, record)
+#             if console:
+#                 return
+#             trecord = thr.get('record')
+#             if trecord is not None:
+#                 trecord.msg += record.msg
+#             else:
+#                 thr['record'] = record
+#                 record.pathname, record.lineno, record.funcName = findcaller()
+#             if record.msg.endswith('\n'):
+#                 thr['record'].msg = thr['record'].msg[:-1]
+#                 origemit(self, thr['record'])
+#                 thr['record'] = None
+#         except (KeyboardInterrupt, SystemExit):
+#             raise
+#         except Exception:  # pylint: disable=locally-disabled, broad-except
+#             self.handleError(record)
+#     return emitmethod
+# 
 
+from logging import StreamHandler
+# class StreamHandler(logging.StreamHandler):
+#     ''' Stream Handler '''
+#     threads = {}
+#     emit = genemitmethod(console=True, origemit=logging.StreamHandler.emit)
+# 
+#     def __init__(self, *args, **kwargs):
+#         if isinstance(kwargs.setdefault('stream', sys.stdout), OutputRedirector):
+#             kwargs['stream'] = kwargs['stream'].filep
+# 
+#         super(StreamHandler, self).__init__(*args, **kwargs)
+# 
+# 
 
-def findcaller():
-    """
-    Find the stack frame of the caller so that we can note the source
-    file name, line number and function name.
-    """
-    f = currentframe()
-    # On some versions of IronPython, currentframe() returns None if
-    # IronPython isn't run with -X:Frames.
-    if f is not None:
-        f = f.f_back
-    rv = "(unknown file)", 0, "(unknown function)"
-    while hasattr(f, "f_code"):
-        code = f.f_code
-        filename = os.path.normcase(code.co_filename)
-        if filename != _SRCFILE:
-            f = f.f_back
-            continue
-        if f.f_back is None or not hasattr(f.f_back, "f_code"):
-            rv = (code.co_filename, f.f_lineno, '*%s*' % code.co_name)
-        else:
-            f = f.f_back
-            code = f.f_code
-            rv = (code.co_filename, f.f_lineno, code.co_name)
-        break
-    return rv
+from logging import FileHandler
+# class FileHandler(logging.FileHandler):
+#     ''' File Handler '''
+#     threads = {}
+#     emit = genemitmethod(console=False, origemit=logging.FileHandler.emit)
+# 
+# 
 
-
-def genemitmethod(console, origemit):
-    ''' generate emit method for handlers '''
-
-    def emitmethod(self, record):
-        ''' emit method for handlers '''
-        try:
-            thr = self.threads.setdefault(record.thread, dict(isprint=False, levelno=None, record=None))
-            tisprint = thr.get('isprint')
-            tlevelno = thr.get('levelno')
-            trecord = thr.get('record')
-            isprint = getattr(record, 'isprint', False)
-            if tlevelno != record.levelno or tisprint != isprint:
-                trecord = thr.get('record')
-                if trecord:
-                    origemit(self, trecord)
-                    thr['record'] = None
-            thr['isprint'] = isprint
-            thr['levelno'] = record.levelno
-            if not isprint:
-                return origemit(self, record)
-            if console:
-                return
-            trecord = thr.get('record')
-            if trecord is not None:
-                trecord.msg += record.msg
-            else:
-                thr['record'] = record
-                record.pathname, record.lineno, record.funcName = findcaller()
-            if record.msg.endswith('\n'):
-                thr['record'].msg = thr['record'].msg[:-1]
-                origemit(self, thr['record'])
-                thr['record'] = None
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except Exception:  # pylint: disable=locally-disabled, broad-except
-            self.handleError(record)
-    return emitmethod
-
-
-class StreamHandler(logging.StreamHandler):
-    ''' Stream Handler '''
-    threads = {}
-    emit = genemitmethod(console=True, origemit=logging.StreamHandler.emit)
-
-    def __init__(self, *args, **kwargs):
-        if isinstance(kwargs.setdefault('stream', sys.stdout), OutputRedirector):
-            kwargs['stream'] = kwargs['stream'].filep
-
-        super(StreamHandler, self).__init__(*args, **kwargs)
-
-
-class FileHandler(logging.FileHandler):
-    ''' File Handler '''
-    threads = {}
-    emit = genemitmethod(console=False, origemit=logging.FileHandler.emit)
-
-
-class RotatingFileHandler(logging.handlers.RotatingFileHandler):
-    ''' Rotating Filehandler '''
-    threads = {}
-    emit = genemitmethod(console=False, origemit=logging.handlers.RotatingFileHandler.emit)
-
-
-class OutputRedirector(object):
-    """ Wrapper to redirect stdout or stderr """
-
-    def __init__(self, filep, logmethod):
-        ''' Output Redirector init '''
-        self.filep = filep
-        self.logmethod = logmethod
-
-    def write(self, s):
-        ''' Write '''
-        self.logmethod(s, extra={'isprint': True})
-        self.filep.write(s)
-
-    def origwrite(self, s):
-        ''' Write data to stream '''
-        self.filep.write(s)
-
-    def writelines(self, lines):
-        ''' Writelines '''
-        self.logmethod('\n'.join(lines), extra={'isprint': True})
-        self.filep.writelines(lines)
-
-    def origwritelines(self, lines):
-        ''' Write data to stream '''
-        self.filep.writelines(lines)
-
-    def flush(self):
-        ''' Flush '''
-        self.filep.flush()
-
-    def isatty(self, *args, **kwargs):  # pylint: disable=locally-disabled, unused-argument, no-self-use
-        ''' isatty is False when in redirection '''
-        return False
+from logging.handlers import RotatingFileHandler
+# class RotatingFileHandler(logging.handlers.RotatingFileHandler):
+#     ''' Rotating Filehandler '''
+#     threads = {}
+#     emit = genemitmethod(console=False, origemit=logging.handlers.RotatingFileHandler.emit)
+# 
+# 
+# class OutputRedirector(object):
+#     """ Wrapper to redirect stdout or stderr """
+# 
+#     def __init__(self, filep, logmethod):
+#         ''' Output Redirector init '''
+#         self.filep = filep
+#         self.logmethod = logmethod
+# 
+#     def write(self, s):
+#         ''' Write '''
+#         self.logmethod(s, extra={'isprint': True})
+#         self.filep.write(s)
+# 
+#     def origwrite(self, s):
+#         ''' Write data to stream '''
+#         self.filep.write(s)
+# 
+#     def writelines(self, lines):
+#         ''' Writelines '''
+#         self.logmethod('\n'.join(lines), extra={'isprint': True})
+#         self.filep.writelines(lines)
+# 
+#     def origwritelines(self, lines):
+#         ''' Write data to stream '''
+#         self.filep.writelines(lines)
+# 
+#     def flush(self):
+#         ''' Flush '''
+#         self.filep.flush()
+# 
+#     def isatty(self, *args, **kwargs):  # pylint: disable=locally-disabled, unused-argument, no-self-use
+#         ''' isatty is False when in redirection '''
+#         return False
 
 
 def logging_setup(verbosity, corridfilter=None, onlyerrorlogs=False):  # pylint: disable=locally-disabled, too-many-statements, too-many-branches
@@ -593,10 +598,10 @@ def logging_setup(verbosity, corridfilter=None, onlyerrorlogs=False):  # pylint:
         fformat = MicroFormatter(VERBOSE_FMT_CORR_ID)
         ENVIRONMENT['fileloghandler'].setFormatter(fformat)
 
-        sys.stdout = OutputRedirector(sys.stdout, printlog.info)
-        sys.stderr = OutputRedirector(sys.stderr, printlog.error)
+#         sys.stdout = OutputRedirector(sys.stdout, printlog.info)
+#         sys.stderr = OutputRedirector(sys.stderr, printlog.error)
     elif toolname.startswith('eventlistener') or toolname.startswith('celery-flower'):
-        sys.stderr = OutputRedirector(sys.stderr, printlog.info)
+#         sys.stderr = OutputRedirector(sys.stderr, printlog.info)
         handler = FileHandler(ENVIRONMENT['logfile'])
         handler.addFilter(corridfilter)
         handler.setLevel(logging.DEBUG)

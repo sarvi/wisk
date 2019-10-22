@@ -356,10 +356,7 @@ Example:
 
         args = partialparse(parser)
 
-        # Setup verbose
         env.logging_setup(args.verbose)
-        # env.ENVIRONMENT['verbosity'] = 0
-        # init = 0
 
         return dotrack(args)
     except KeyboardInterrupt:
