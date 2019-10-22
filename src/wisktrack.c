@@ -285,6 +285,9 @@ typedef int (*__libc_symlink)(const char *target, const char *linkpath);
 typedef int (*__libc_symlinkat)(const char *target, int newdirfd, const char *linkpath);
 typedef int (*__libc_link)(const char *oldpath, const char *newpath);
 typedef int (*__libc_linkat)(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
+typedef int (*__libc_unlink)(const char *pathname);
+typedef int (*__libc_unlinkat)(int dirfd, const char *pathname, int flags);
+
 
 #define WISK_SYMBOL_ENTRY(i) \
 	union { \
@@ -318,6 +321,8 @@ struct wisk_libc_symbols {
  	WISK_SYMBOL_ENTRY(symlinkat);
  	WISK_SYMBOL_ENTRY(link);
  	WISK_SYMBOL_ENTRY(linkat);
+	WISK_SYMBOL_ENTRY(unlink);
+	WISK_SYMBOL_ENTRY(unlinkat);
 };
 
 struct wisk {
@@ -725,10 +730,26 @@ static int libc_link(const char *oldpath, const char *newpath)
 
 static int libc_linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags)
 {
-//	WISK_LOG(WISK_LOG_TRACE, "static libc_link(%d, %s, %d, %s, %d)", olddirfd, oldpath, newdirfd, newpath, flags) ;
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_linkat(%d, %s, %d, %s, %d)", olddirfd, oldpath, newdirfd, newpath, flags) ;
 	wisk_bind_symbol_libc(linkat);
 
 	return wisk.libc.symbols._libc_linkat.f(olddirfd, oldpath, newdirfd, newpath, flags);
+}
+
+static int libc_unlink(const char *pathname)
+{
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_unlink(%s)", pathname);
+	wisk_bind_symbol_libc(unlink);
+
+	return wisk.libc.symbols._libc_unlink.f(pathname);
+}
+
+static int libc_unlinkat(int dirfd, const char *pathname, int flags)
+{
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_unlinkat(%d, %s, %d)", dirfd, pathname, flags) ;
+	wisk_bind_symbol_libc(unlinkat);
+
+	return wisk.libc.symbols._libc_unlinkat.f(dirfd, pathname, flags);
 }
 
 
@@ -758,6 +779,8 @@ static void wisk_bind_symbol_all(void)
  	wisk_bind_symbol_libc(symlinkat);
  	wisk_bind_symbol_libc(link);
  	wisk_bind_symbol_libc(linkat);
+	wisk_bind_symbol_libc(unlink);
+	wisk_bind_symbol_libc(unlinkat);
 }
 
 /*********************************************************
@@ -794,6 +817,24 @@ void wisk_report_link(const char *target, const char *linkpath)
     } else {
         WISK_LOG(WISK_LOG_TRACE, "LINKS %s %s", target, linkpath);
 	}
+}
+
+void wisk_report_unlink(const char *pathname)
+{
+    char msgbuffer[BUFFER_SIZE];
+    char tbuf[PATH_MAX], lbuf[PATH_MAX];
+    int msglen;
+
+    if (fs_tracker_pipe < 0)
+        return;
+    if (fs_tracker_enabled()) {
+//        WISK_LOG(WISK_LOG_TRACE, "UNLINK %s", pathname);
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s UNLINK [\"%s\"]\n",
+        fs_tracker_uuid, ifnotabsolute(tbuf, pathname));
+        write(fs_tracker_pipe, msgbuffer, msglen);
+    } else {
+        WISK_LOG(WISK_LOG_TRACE, "UNLINK %s", pathname);
+    }
 }
 
 void wisk_report_write(const char *fname)
@@ -1798,6 +1839,39 @@ int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath,
 }
 #endif
 
+#ifdef INTERCEPT_UNLINK
+static int wisk_unlink(const char *pathname)
+{
+	if (fs_tracker_enabled()) {
+		wisk_report_unlink(pathname);
+	    return libc_unlink(pathname);
+    } else
+	    return libc_unlink(pathname);
+}
+
+int unlink(const char *pathname)
+{
+    WISK_LOG(WISK_LOG_TRACE, "unlink(%s)", pathname);
+	return wisk_unlink(pathname);
+}
+#endif
+
+#ifdef INTERCEPT_UNLINKAT
+static int wisk_unlinkat(int dirfd, const char *pathname, int flags)
+{
+	if (fs_tracker_enabled()) {
+		wisk_report_unlink(pathname);
+	    return libc_unlinkat(dirfd, pathname, flags);
+    } else
+	    return libc_unlinkat(dirfd, pathname, flags);
+}
+
+int unlinkat(int dirfd, const char *pathname, int flags)
+{
+    WISK_LOG(WISK_LOG_TRACE, "unlinkat(%d, %s, %d)", dirfd, pathname, flags);
+	return wisk_unlinkat(dirfd, pathname, flags);
+}
+#endif
 
 
 
