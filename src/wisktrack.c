@@ -829,7 +829,7 @@ void wisk_report_unlink(const char *pathname)
         return;
     if (fs_tracker_enabled()) {
 //        WISK_LOG(WISK_LOG_TRACE, "UNLINK %s", pathname);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s UNLINK [\"%s\"]\n",
+        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s UNLINK \"%s\"\n",
         fs_tracker_uuid, ifnotabsolute(tbuf, pathname));
         write(fs_tracker_pipe, msgbuffer, msglen);
     } else {
