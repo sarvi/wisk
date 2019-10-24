@@ -69,11 +69,10 @@ CONFIG_DATATYPES = {
 
 CONFIG_DEFAULTS = {
 #    'filterfields': '',
-    'filterfields': 'COMMAND_PATH COMMAND OPERATIONS WORKING_DIRECTORY ENVIRONMENT invokes mergedcommands command_type',
-#     'prefer_shell': True,
-    'shelltool_patterns': '',
-    'hardtool_patterns': '',
-    'buildtool_patterns': '',
+#    'filterfields': 'COMMAND_PATH COMMAND OPERATIONS WORKING_DIRECTORY ENVIRONMENT invokes mergedcommands command_type',
+#    'shelltool_patterns': '',
+#    'hardtool_patterns': '',
+#    'buildtool_patterns': '',
 }
 
 CONFIG_TOOLS = ['hardtool', 'buildtool', 'shelltool']
@@ -440,8 +439,8 @@ class CLIError(Exception):
 def configparse(configfile):
     ''' Configuration File '''
     global CONFIG
-#    config = configparser.ConfigParser(defaults=CONFIG_DEFAULTS, interpolation=configparser.BasicInterpolation())
     config = configparser.ConfigParser(defaults=CONFIG_DEFAULTS, interpolation=configparser.BasicInterpolation())
+    print('Reading Config: %s' % (configfile))
     config.read(configfile)
     CONFIG = {}
     for secname, secproxy in config.items():
@@ -466,7 +465,13 @@ def partialparse(parser):
     args.command = sys.argv[idx+1:]
     log.debug('Args & Command: %s', args)
     WISK_TRACKER_PIPE=("%s/wisk_tracker.pipe" % args.wsroot)
-    CONFIG_DEFAULTS.update(vars(args))
+    for k,v in vars(args).items():
+      if k == 'command': continue
+      if isinstance(v, list):
+          v= ' '.join(str(i) for i in v)      
+      else:
+          v = str(v)
+      CONFIG_DEFAULTS[k]=v
     return args
    
 
