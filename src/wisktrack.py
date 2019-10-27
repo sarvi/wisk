@@ -49,6 +49,9 @@ WISK_TRACKER_PIPE=None
 WISK_TRACKER_UUID='XXXXXXXX-XXXXXXXX-XXXXXXXX'
 WISK_DEPDATA='wisk_depdata'
 WISK_PARSER_CFG='wisk_parser.cfg'
+WISK_INSIGHT_FILENAME='wisk_insight.data'
+WISK_INSIGHT_FILE=None
+UNRECOGNIZED_TOOLS_CXT = []
 FIELDS_ALL = ['UUID', 'P-UUID', 'PID', 'PPID', 'WORKING_DIRECTORY', 'OPERATIONS', 'COMMAND', 'COMMAND_PATH', 
               'ENVIRONMENT', 'COMPLETE', 'command_type', 'children', 'WSROOT', 'invokes', 'mergedcommands']
 
@@ -83,7 +86,19 @@ def match_command_type(node):
             log.debug('Command Type: %s(pattern)', node.command_path)
             log.debug([i.match(node.command_path) for i in CONFIG['command_type']['%s_patterns'%tool_type]])
             return tool_type
-    log.error('Unrecognized Program: %s', node.command_path)
+    n=node
+    tab=''
+    outdata=''
+    cmdcxt=[]
+    while n.uuid != WISK_TRACKER_UUID:
+        cmdcxt.append(n.command_path)
+        outdata = outdata + '%s%s [%s]\n' % (tab, n.command_path, ' '.join(n.command))
+        tab=tab+'    '
+        n = n.parent
+    if cmdcxt not in UNRECOGNIZED_TOOLS_CXT:
+        UNRECOGNIZED_TOOLS_CXT.append(cmdcxt)
+        WISK_INSIGHT_FILE.write(outdata)
+        log.error('Unrecognized Program: %s', node.command_path)
     return None
 
 def checkfortooltypeinherit(node):
@@ -238,8 +253,8 @@ class ProgramNode(object):
             opbuffer = opbuffer[:-1] + data[1:]
         else:
             opbuffer = opbuffer + data
-        if (operation in ['ENVIRONMENT', 'COMMAND', 'LINKS'] and not data.endswith(']\n')) \
-            or (operation not in ['ENVIRONMENT', 'COMMAND', 'LINKS'] and not data.endswith('"\n')):
+        if (operation in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith(']\n')) \
+            or (operation not in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith('"\n')):
             setattr(pn, buffer_name, opbuffer)
             return
         data = opbuffer
@@ -266,8 +281,8 @@ class ProgramNode(object):
             setattr(pn, operation.lower(), data)
         elif operation in ['COMMAND_PATH',]:
             setattr(pn, operation.lower(), data)
-            pn.command_type = match_command_type(pn)
         elif operation in ['COMPLETE']:
+            pn.command_type = match_command_type(pn)
             pn.node_complete()
         else:
             pn.operations.append((operation, data))
@@ -453,6 +468,9 @@ def configparse(configfile):
             for do_op in dtype:
                 CONFIG[secname][k] = do_op(CONFIG[secname][k])
 
+def insight_init(args):
+    global WISK_INSIGHT_FILE
+    WISK_INSIGHT_FILE = open(os.path.join(args.wsroot, WISK_INSIGHT_FILENAME) if os.path.exists(args.wsroot) else WISK_INSIGHT_FILENAME, 'w')
 
 def partialparse(parser):
     ''' Parse args until first unknown '''
@@ -525,6 +543,7 @@ Example:
 
         env.logging_setup(args.verbose)
         configparse(args.config)
+        insight_init(args)
 
         return dotrack(args)
     except KeyboardInterrupt:
