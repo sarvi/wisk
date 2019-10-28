@@ -72,7 +72,7 @@ CONFIG_DATATYPES = {
 
 CONFIG_DEFAULTS = {
 #    'filterfields': '',
-#    'filterfields': 'COMMAND_PATH COMMAND OPERATIONS WORKING_DIRECTORY ENVIRONMENT invokes mergedcommands command_type',
+    'filterfields': 'COMMAND_PATH COMMAND OPERATIONS WORKING_DIRECTORY ENVIRONMENT invokes mergedcommands command_type',
 #    'shelltool_patterns': '',
 #    'hardtool_patterns': '',
 #    'buildtool_patterns': '',
@@ -292,6 +292,9 @@ class ProgramNode(object):
     def merge_node(cls, node=None):
         if node is None:
             node = ProgramNode.progtree[WISK_TRACKER_UUID]
+        if not node.complete:
+            log.error('Incomplete Command: %s [%s]', node.command_path, ' '.join(node.command))
+            WISK_INSIGHT_FILE.write('Incomplete Command: %s [%s]' % (node.command_path, ' '.join(node.command)))
         checkfortooltypeinherit(node)
         for cn in list(node.children):
             ProgramNode.merge_node(cn)
@@ -331,7 +334,7 @@ def expand_environment(program=None):
 
 def clean_data(args):
     print('Extracting and Cleaning Data')
-    ProgramNode(WISK_TRACKER_UUID)
+    ProgramNode(WISK_TRACKER_UUID).complete=True
     ifile = open(args.trackfile + '.raw')
     count = 0
     for l in ifile.readlines():
@@ -484,12 +487,12 @@ def partialparse(parser):
     log.debug('Args & Command: %s', args)
     WISK_TRACKER_PIPE=("%s/wisk_tracker.pipe" % args.wsroot)
     for k,v in vars(args).items():
-      if k == 'command': continue
-      if isinstance(v, list):
-          v= ' '.join(str(i) for i in v)      
-      else:
-          v = str(v)
-      CONFIG_DEFAULTS[k]=v
+        if k == 'command': continue
+        if isinstance(v, list):
+            v= ' '.join(str(i) for i in v)
+        else:
+            v = str(v)
+        CONFIG_DEFAULTS[k]=v
     return args
    
 
