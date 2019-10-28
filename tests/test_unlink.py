@@ -29,8 +29,8 @@ import os
 
 
 testcases = [
-    [0, ('UNLINK ["/tmp/{testname}/fileH1"]',
-         'UNLINK ["/tmp/{testname}/fileS1"]'),
+    [0, ('UNLINK "/tmp/{testname}/fileH1"',
+         'UNLINK "/tmp/{testname}/fileS1"'),
      TEMPLATE_COMMON+     '''
 open('/tmp/{testname}/file1', 'w').close()
 os.link('/tmp/{testname}/file1', '/tmp/{testname}/fileH1')
