@@ -800,20 +800,108 @@ char* ifnotabsolute(char *retbuf, const char *fname)
 	}
 }
 
+static inline void escapedcharcopy(char **d, char **s)
+{
+    int j;
+    char esc_char[]= { '\a','\b','\f','\n','\r','\t','\v','\\', '"'};
+    char essc_str[]= {  'a', 'b', 'f', 'n', 'r', 't', 'v','\\', '"'};
+
+    for(j=0; j< 9 ;j++){
+        if( **s==esc_char[j] ){
+          *(*d)++ = '\\';
+          *(*d)++ = essc_str[j];
+          (*s)++;
+          break;
+        }
+    }
+    if(j == 9 )
+        *(*d)++ = *(*s)++;
+}
+
+static inline void flushbuffer(char *msgbuffer, char **trackdest, int *trackcont)
+{
+    *(*trackdest)++ = '\n';
+    **trackdest='\0';
+    WISK_LOG(WISK_LOG_TRACE, msgbuffer);
+	write(fs_tracker_pipe, msgbuffer, *trackdest - msgbuffer +1);
+    *trackdest = msgbuffer;
+    *msgbuffer='\0';
+    if (trackcont)
+        *trackcont = true;
+}
+
+
+// msgbuffer - to use for reporting opersation
+// uuid - associated with operation
+// operation - string
+// valuestr - to copy over
+// idx - < 0 means, it is a single string, if >=0 it is a list, and this is the idx
+// trackdest - current ptr within msgbuffer where the next character can be copied
+// trackcont - Are we in operation start or continuation mode
+static void wisk_report_operation(char *msgbuffer, char const *uuid, char const *operation, char *valuestr, int idx, char **trackdest, int *trackcont)
+{
+    char *src, *ldest;
+    int lcont=false;
+
+    if (trackcont == NULL) {
+        trackcont = &lcont;
+    }
+    if (trackdest == NULL) {
+        ldest = msgbuffer;
+        trackdest = &ldest;
+    }
+    for(src=valuestr; *src; ) {
+        if (*trackdest >= msgbuffer+BUFFER_SIZE-10) { // Enough space to copy a char+'\0' OR escaped char + '\0'
+            flushbuffer(msgbuffer, trackdest, trackcont);
+        }
+        if (*trackdest==msgbuffer) { // If beginning of Buffer
+            *trackdest = msgbuffer+snprintf(*trackdest, BUFFER_SIZE, "%s %s ", uuid, operation);
+            if (*trackcont)
+                *(*trackdest)++ = '*';
+            else if (idx >= 0) // Its a list
+                *(*trackdest)++ = '[';
+            continue;
+        }
+        if (src==valuestr) {
+	        if (idx > 0) {
+                *(*trackdest)++ = ',';
+                *(*trackdest)++ = ' ';
+	        }
+            *(*trackdest)++ = '"';
+        }
+        escapedcharcopy(trackdest, &src);
+	}
+    *(*trackdest)++ = '"';
+    if (idx < 0) // If idx < 0, its not a list, nothing more flush it
+        flushbuffer(msgbuffer, trackdest, trackcont);
+}
+
+static wisk_report_operationlist(char *msgbuffer, char const *uuid, char const *varname, char *listp[])
+{
+	char *dest = msgbuffer;
+    int cont=0, idx;
+
+	for(idx=0; listp[idx]; idx++) {
+	    wisk_report_operation(msgbuffer, uuid, varname, listp[idx], idx, &dest, &cont);
+	}
+    *dest++ = ']';
+    flushbuffer(msgbuffer, &dest, &cont);
+}
+
 
 void wisk_report_link(const char *target, const char *linkpath)
 {
     char msgbuffer[BUFFER_SIZE];
+    char *listp[] = {NULL, NULL, NULL};
     char tbuf[PATH_MAX], lbuf[PATH_MAX];
     int msglen;
 
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
-//        WISK_LOG(WISK_LOG_TRACE, "LINKS %s %s", target, linkpath);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s LINKS [\"%s\", \"%s\"]\n",
-        		fs_tracker_uuid, ifnotabsolute(tbuf, target), ifnotabsolute(lbuf, linkpath));
-        write(fs_tracker_pipe, msgbuffer, msglen);
+        listp[0] = ifnotabsolute(tbuf, target);
+        listp[1] = ifnotabsolute(lbuf, linkpath);
+        wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "LINKS", listp);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "LINKS %s %s", target, linkpath);
 	}
@@ -822,16 +910,13 @@ void wisk_report_link(const char *target, const char *linkpath)
 void wisk_report_unlink(const char *pathname)
 {
     char msgbuffer[BUFFER_SIZE];
-    char tbuf[PATH_MAX], lbuf[PATH_MAX];
+    char buf[PATH_MAX], lbuf[PATH_MAX];
     int msglen;
 
     if (fs_tracker_pipe < 0)
         return;
     if (fs_tracker_enabled()) {
-//        WISK_LOG(WISK_LOG_TRACE, "UNLINK %s", pathname);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s UNLINK \"%s\"\n",
-        fs_tracker_uuid, ifnotabsolute(tbuf, pathname));
-        write(fs_tracker_pipe, msgbuffer, msglen);
+        wisk_report_operation(msgbuffer, fs_tracker_uuid, "UNLINK", ifnotabsolute(buf, pathname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "UNLINK %s", pathname);
     }
@@ -846,9 +931,7 @@ void wisk_report_write(const char *fname)
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
-//        WISK_LOG(WISK_LOG_TRACE, "WRITES %s", fname);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s WRITES \"%s\"\n", fs_tracker_uuid, ifnotabsolute(buf, fname));
-        write(fs_tracker_pipe, msgbuffer, msglen);
+        wisk_report_operation(msgbuffer, fs_tracker_uuid, "WRITES", ifnotabsolute(buf, fname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "WRITES %s", fname);
 	}
@@ -863,9 +946,7 @@ void wisk_report_read(const char *fname)
     if (fs_tracker_pipe < 0)
     	return;
 	if (fs_tracker_enabled()) {
-//        WISK_LOG(WISK_LOG_TRACE, "READS %s", fname);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s READS \"%s\"\n", fs_tracker_uuid, ifnotabsolute(buf, fname));
-        write(fs_tracker_pipe, msgbuffer, msglen);
+        wisk_report_operation(msgbuffer, fs_tracker_uuid, "READS", ifnotabsolute(buf, fname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "READS %s", fname);
 	}
@@ -878,84 +959,10 @@ void wisk_report_unknown(const char *fname, const char *mode)
     int msglen;
 
 	if (fs_tracker_enabled() && (fs_tracker_pipe >=0)) {
-//        WISK_LOG(WISK_LOG_TRACE, "READS-UNKNOWN %s", fname);
-        msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s READS-UNKNOWN(%s) \"%s\"\n", fs_tracker_uuid, mode, ifnotabsolute(buf, fname));
-        write(fs_tracker_pipe, msgbuffer, msglen);
+        wisk_report_operation(msgbuffer, fs_tracker_uuid, "READS-UNKNOWN", (char*)fname, -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "READS %s", fname);
 	}
-}
-
-static char* escape(char *d, char *s)
-{
-	char *rv;
-	for(rv=d;*s;s++, d++) {
-		switch (*s) {
-		case '\\':
-			*d='\\';
-			d++;
-			*d='\\';
-			d++;
-			*d='\\';
-			d++;
-		}
-		*d = *s;
-	}
-	*d = '\0';
-//	WISK_LOG(WISK_LOG_TRACE, "%s\n", rv);
-	return  rv;
-}
-
-static int wisk_report_stringwithcontinuation(char *msgbuffer, int msglen, char const *varname)
-{
-	if (msglen > 0 && msglen < BUFFER_SIZE-10)
-		return msglen;
-	if (msglen) {
-//		assert(msgbuffer[msglen] == '\0');
-		msgbuffer[msglen] = '\n';
-		msglen++;
-		msgbuffer[msglen] = '\0';
-//	    WISK_LOG(WISK_LOG_TRACE, "Continuation: %.100s", msgbuffer);
-	    write(fs_tracker_pipe, msgbuffer, msglen);
-	}
-    msgbuffer[0] = '\0';
-    return snprintf(msgbuffer, BUFFER_SIZE, "%s %s %c", fs_tracker_uuid, varname, (msglen ? '*' : '['))+1;
-}
-
-static wisk_report_stringlist(char *msgbuffer, char const *varname, char *listp[])
-{
-	char *c;
-	int idx, stlen, prlen, stleft, stidx;
-	int msglen = 0;
-
-	msglen = wisk_report_stringwithcontinuation(msgbuffer, msglen, varname);
-//    WISK_LOG(WISK_LOG_TRACE, "%s", msgbuffer);
-	for(idx=0; listp[idx]; idx++) {
-//	    WISK_LOG(WISK_LOG_TRACE, "%d: %5d, %.50s", idx, strlen(listp[idx]), listp[idx]);
-		if (idx > 0) {
-			strncpy(msgbuffer+msglen-1, ", ", 3);
-			msglen += 2;
-		}
-		strncpy(msgbuffer+msglen-1, "\"", 2);
-		msglen += 1;
-//	    WISK_LOG(WISK_LOG_TRACE, ">>1: %s", msgbuffer);
-		stlen = strlen(listp[idx]);
-		for(c=listp[idx]; *c; c++, msglen++){
-			msgbuffer[msglen-1]=*c;
-			if (msglen < BUFFER_SIZE-10)
-				continue;
-			msgbuffer[msglen]='\0';
-//		    WISK_LOG(WISK_LOG_TRACE, ">>2: %s", msgbuffer);
-			msglen = wisk_report_stringwithcontinuation(msgbuffer, msglen, varname)-1;
-//			WISK_LOG(WISK_LOG_TRACE, ">>3 Left: %s", c);
-		}
-//	    WISK_LOG(WISK_LOG_TRACE, ">>4: %s", msgbuffer);
-		strncpy(msgbuffer+msglen-1, "\"", 2);
-		msglen += 1;
-	}
-	msglen += snprintf(msgbuffer+msglen-1, BUFFER_SIZE-msglen, "]\n");
-//    WISK_LOG(WISK_LOG_TRACE, "Final: %s", msgbuffer);
-	write(fs_tracker_pipe, msgbuffer, msglen-1);
 }
 
 static void  wisk_report_command()
@@ -963,6 +970,8 @@ static void  wisk_report_command()
     int i, msglen, envcount, count;
     char curprog[PATH_MAX];
 	char curpath[PATH_MAX];
+	char pidstr[PATH_MAX];
+	char ppidstr[PATH_MAX];
     char msgbuffer[BUFFER_SIZE];
     char envstr[BUFFER_SIZE];
 
@@ -972,21 +981,17 @@ static void  wisk_report_command()
     if (i != -1) {
       curprog[i] = '\0';
     }
-    WISK_LOG(WISK_LOG_TRACE, "%s CALLS %s PID=%d PPID=%d)",fs_tracker_puuid, fs_tracker_uuid, getpid(), getppid());
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s CALLS \"%s\"\n", fs_tracker_puuid, fs_tracker_uuid);
-    write(fs_tracker_pipe, msgbuffer, msglen);
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s PID \"%d\"\n", fs_tracker_uuid, getpid());
-    write(fs_tracker_pipe, msgbuffer, msglen);
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s PPID \"%d\"\n", fs_tracker_uuid, getppid());
-    write(fs_tracker_pipe, msgbuffer, msglen);
 	getcwd(curpath, PATH_MAX);
-	msglen = snprintf(msgbuffer, PATH_MAX, "%s WORKING_DIRECTORY \"%s\"\n", fs_tracker_uuid, curpath);
-    write(fs_tracker_pipe, msgbuffer, msglen);
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMMAND_PATH \"%s\"\n", fs_tracker_uuid, curprog);
-    write(fs_tracker_pipe, msgbuffer, msglen);
-
-    wisk_report_stringlist(msgbuffer, "COMMAND", saved_argv);
-    wisk_report_stringlist(msgbuffer, "ENVIRONMENT", environ);
+    WISK_LOG(WISK_LOG_TRACE, "%s CALLS %s PID=%d PPID=%d)",fs_tracker_puuid, fs_tracker_uuid, getpid(), getppid());
+    wisk_report_operation(msgbuffer, fs_tracker_puuid, "CALLS", fs_tracker_uuid, -1, NULL, NULL);
+    snprintf(pidstr, PATH_MAX, "%d", getpid());
+    wisk_report_operation(msgbuffer, fs_tracker_puuid, "PID", pidstr, -1, NULL, NULL);
+    snprintf(ppidstr, PATH_MAX, "%d", getppid());
+    wisk_report_operation(msgbuffer, fs_tracker_puuid, "PPID", ppidstr, -1, NULL, NULL);
+    wisk_report_operation(msgbuffer, fs_tracker_uuid, "WORKING_DIRECTORY", curpath, -1, NULL, NULL);
+    wisk_report_operation(msgbuffer, fs_tracker_uuid, "COMMAND_PATH", curprog, -1, NULL, NULL);
+    wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMMAND", saved_argv);
+    wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "ENVIRONMENT", environ);
 }
 
 static void  wisk_report_commandcomplete()
@@ -996,8 +1001,9 @@ static void  wisk_report_commandcomplete()
 
     if (fs_tracker_pipe < 0)
     	return;
-    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMPLETE []\n", fs_tracker_uuid);
-    write(fs_tracker_pipe, msgbuffer, msglen);
+    wisk_report_operation(msgbuffer, fs_tracker_uuid, "COMPLETE", "[]", -1, NULL, NULL);
+//    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMPLETE []\n", fs_tracker_uuid);
+//    write(fs_tracker_pipe, msgbuffer, msglen);
 }
 
 

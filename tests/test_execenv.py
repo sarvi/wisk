@@ -70,8 +70,9 @@ os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('11111X', 
-         'ENVIRONMENT *", "ZLASTVAR=END"'),
+    [0, ('"LARGEVAR=111111111',
+         '11111X"', 
+         'ENVIRONMENT *, "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
 os.environ["LARGEVAR"] = '1'*3775+'X'
@@ -80,11 +81,21 @@ os.environ["ZLASTVAR"] = "END"
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
     [0, ('"LARGEVAR=111111111',
-         '11111X',
-         '*1", "ZLASTVAR=END"'),
+         '111111X', 
+         'ENVIRONMENT *1", "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
 os.environ["LARGEVAR"] = '1'*3775+'X'+'1'
+os.environ["ZLASTVAR"] = "END"
+
+sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
+     '''],
+    [0, ('"LARGEVAR=111111111',
+         '111111X', 
+         'ENVIRONMENT *11", "ZLASTVAR=END"'),
+     TEMPLATE_COMMON+'''
+os.environ.clear()
+os.environ["LARGEVAR"] = '1'*3775+'X'+'11'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
