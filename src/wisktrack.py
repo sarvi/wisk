@@ -111,7 +111,7 @@ def checkfortooltypeinherit(node):
 
 def checkformerge(node):
     if node.uuid == WISK_TRACKER_UUID:
-        log.debug('Root: Skip Merging %s', node.command)
+        log.debug('Root: Skip Merging')
         return False
     if node.parent.uuid == WISK_TRACKER_UUID:
         log.debug('Top-Tool: Skip Merging %s', node.command)
@@ -228,7 +228,6 @@ class ProgramNode(object):
 
     def node_complete(self):
         self.complete = True
-    
 
     @classmethod
     def getorcreate(cls, uuid, parent=None, **kwargs):

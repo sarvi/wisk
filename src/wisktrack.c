@@ -823,7 +823,7 @@ static inline void flushbuffer(char *msgbuffer, char **trackdest, int *trackcont
     *(*trackdest)++ = '\n';
     **trackdest='\0';
     WISK_LOG(WISK_LOG_TRACE, msgbuffer);
-	write(fs_tracker_pipe, msgbuffer, *trackdest - msgbuffer +1);
+	write(fs_tracker_pipe, msgbuffer, *trackdest - msgbuffer);
     *trackdest = msgbuffer;
     *msgbuffer='\0';
     if (trackcont)
@@ -858,8 +858,6 @@ static void wisk_report_operation(char *msgbuffer, char const *uuid, char const 
             *trackdest = msgbuffer+snprintf(*trackdest, BUFFER_SIZE, "%s %s ", uuid, operation);
             if (*trackcont)
                 *(*trackdest)++ = '*';
-            else if (idx >= 0) // Its a list
-                *(*trackdest)++ = '[';
             continue;
         }
         if (src==valuestr) {
@@ -881,6 +879,7 @@ static wisk_report_operationlist(char *msgbuffer, char const *uuid, char const *
 	char *dest = msgbuffer;
     int cont=0, idx;
 
+    dest = msgbuffer+snprintf(dest, BUFFER_SIZE, "%s %s [", uuid, varname);
 	for(idx=0; listp[idx]; idx++) {
 	    wisk_report_operation(msgbuffer, uuid, varname, listp[idx], idx, &dest, &cont);
 	}
@@ -997,13 +996,12 @@ static void  wisk_report_command()
 static void  wisk_report_commandcomplete()
 {
     int msglen;
+    char *listp[] = {NULL};
     char msgbuffer[BUFFER_SIZE];
 
     if (fs_tracker_pipe < 0)
     	return;
-    wisk_report_operation(msgbuffer, fs_tracker_uuid, "COMPLETE", "[]", -1, NULL, NULL);
-//    msglen = snprintf(msgbuffer, BUFFER_SIZE, "%s COMPLETE []\n", fs_tracker_uuid);
-//    write(fs_tracker_pipe, msgbuffer, msglen);
+    wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMPLETE", listp);
 }
 
 
