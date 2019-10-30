@@ -850,6 +850,19 @@ static void wisk_report_operation(char *msgbuffer, char const *uuid, char const 
         ldest = msgbuffer;
         trackdest = &ldest;
     }
+    if (*trackdest >= msgbuffer+BUFFER_SIZE-10) { // Enough space to copy a char+'\0' OR escaped char + '\0'
+        flushbuffer(msgbuffer, trackdest, trackcont);
+    }
+    if (*trackdest==msgbuffer) { // If beginning of Buffer
+        *trackdest = msgbuffer+snprintf(*trackdest, BUFFER_SIZE, "%s %s ", uuid, operation);
+        if (*trackcont)
+            *(*trackdest)++ = '*';
+    }
+	if (idx > 0) {
+        *(*trackdest)++ = ',';
+        *(*trackdest)++ = ' ';
+	}
+    *(*trackdest)++ = '"';
     for(src=valuestr; *src; ) {
         if (*trackdest >= msgbuffer+BUFFER_SIZE-10) { // Enough space to copy a char+'\0' OR escaped char + '\0'
             flushbuffer(msgbuffer, trackdest, trackcont);
@@ -859,13 +872,6 @@ static void wisk_report_operation(char *msgbuffer, char const *uuid, char const 
             if (*trackcont)
                 *(*trackdest)++ = '*';
             continue;
-        }
-        if (src==valuestr) {
-	        if (idx > 0) {
-                *(*trackdest)++ = ',';
-                *(*trackdest)++ = ' ';
-	        }
-            *(*trackdest)++ = '"';
         }
         escapedcharcopy(trackdest, &src);
 	}
@@ -881,6 +887,7 @@ static wisk_report_operationlist(char *msgbuffer, char const *uuid, char const *
 
     dest = msgbuffer+snprintf(dest, BUFFER_SIZE, "%s %s [", uuid, varname);
 	for(idx=0; listp[idx]; idx++) {
+        WISK_LOG(WISK_LOG_TRACE, "%s: ['%s']", varname, listp[idx]);
 	    wisk_report_operation(msgbuffer, uuid, varname, listp[idx], idx, &dest, &cont);
 	}
     *dest++ = ']';
