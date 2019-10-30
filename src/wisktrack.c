@@ -991,9 +991,9 @@ static void  wisk_report_command()
     WISK_LOG(WISK_LOG_TRACE, "%s CALLS %s PID=%d PPID=%d)",fs_tracker_puuid, fs_tracker_uuid, getpid(), getppid());
     wisk_report_operation(msgbuffer, fs_tracker_puuid, "CALLS", fs_tracker_uuid, -1, NULL, NULL);
     snprintf(pidstr, PATH_MAX, "%d", getpid());
-    wisk_report_operation(msgbuffer, fs_tracker_puuid, "PID", pidstr, -1, NULL, NULL);
+    wisk_report_operation(msgbuffer, fs_tracker_uuid, "PID", pidstr, -1, NULL, NULL);
     snprintf(ppidstr, PATH_MAX, "%d", getppid());
-    wisk_report_operation(msgbuffer, fs_tracker_puuid, "PPID", ppidstr, -1, NULL, NULL);
+    wisk_report_operation(msgbuffer, fs_tracker_uuid, "PPID", ppidstr, -1, NULL, NULL);
     wisk_report_operation(msgbuffer, fs_tracker_uuid, "WORKING_DIRECTORY", curpath, -1, NULL, NULL);
     wisk_report_operation(msgbuffer, fs_tracker_uuid, "COMMAND_PATH", curprog, -1, NULL, NULL);
     wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMMAND", saved_argv);
