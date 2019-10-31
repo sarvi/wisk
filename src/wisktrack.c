@@ -163,7 +163,6 @@ static pid_t fs_tracker_pid = -1;
 static int fs_tracker_pipe = -1;
 static char fs_tracker_uuid[UUID_SIZE+1];
 static char fs_tracker_puuid[UUID_SIZE+1];
-static char writebuffer[BUFFER_SIZE];
 
 /* Mutex to synchronize access to global libc.symbols */
 static pthread_mutex_t libc_symbol_binding_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -622,7 +621,7 @@ static FILE *libc_popen(const char *command, const char *type)
 
 static FILE *libc_fopen(const char *name, const char *mode)
 {
-	WISK_LOG(WISK_LOG_TRACE, "static libc_fopen(%s, %s)", name, mode);
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_fopen(%s, %s)", name, mode);
 	wisk_bind_symbol_libc(fopen);
 
 	return wisk.libc.symbols._libc_fopen.f(name, mode);
@@ -714,8 +713,8 @@ static int libc_symlink(const char *target, const char *linkpath)
 
 static int libc_symlinkat(const char *target, int newdirfd, const char *linkpath)
 {
-//	WISK_LOG(WISK_LOG_TRACE, "static libc_link(%s, %d, %s)", target, newdirfd, linkpath) ;
-	wisk_bind_symbol_libc(linkat);
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_symlink(%s, %d, %s)", target, newdirfd, linkpath) ;
+	wisk_bind_symbol_libc(symlinkat);
 
 	return wisk.libc.symbols._libc_symlinkat.f(target, newdirfd, linkpath);
 }
@@ -843,6 +842,7 @@ static void wisk_report_operation(char *msgbuffer, char const *uuid, char const 
     char *src, *ldest;
     int lcont=false;
 
+//    WISK_LOG(WISK_LOG_TRACE, "%s: %s", uuid, operation);
     if (trackcont == NULL) {
         trackcont = &lcont;
     }
@@ -880,15 +880,16 @@ static void wisk_report_operation(char *msgbuffer, char const *uuid, char const 
         flushbuffer(msgbuffer, trackdest, trackcont);
 }
 
-static wisk_report_operationlist(char *msgbuffer, char const *uuid, char const *varname, char *listp[])
+static wisk_report_operationlist(char *msgbuffer, char const *uuid, char const *operation, char *listp[])
 {
 	char *dest = msgbuffer;
     int cont=0, idx;
 
-    dest = msgbuffer+snprintf(dest, BUFFER_SIZE, "%s %s [", uuid, varname);
+//    WISK_LOG(WISK_LOG_TRACE, "%s: %s", uuid, operation);
+    dest = msgbuffer+snprintf(dest, BUFFER_SIZE, "%s %s [", uuid, operation);
 	for(idx=0; listp[idx]; idx++) {
-        WISK_LOG(WISK_LOG_TRACE, "%s: ['%s']", varname, listp[idx]);
-	    wisk_report_operation(msgbuffer, uuid, varname, listp[idx], idx, &dest, &cont);
+        WISK_LOG(WISK_LOG_TRACE, "%s: ['%s']", operation, listp[idx]);
+	    wisk_report_operation(msgbuffer, uuid, operation, listp[idx], idx, &dest, &cont);
 	}
     *dest++ = ']';
     flushbuffer(msgbuffer, &dest, &cont);
