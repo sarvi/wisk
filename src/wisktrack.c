@@ -43,8 +43,8 @@
 #include <sys/time.h>
 #include <sys/timeb.h>
 #include <sys/stat.h>
-#include <errno.h>
 #include <sys/un.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -56,6 +56,7 @@
 #include <pthread.h>
 #include <spawn.h>
 #include <linux/limits.h>
+
 
 enum wisk_dbglvl_e {
 	WISK_LOG_ERROR = 0,
@@ -151,6 +152,13 @@ char *wisk_env_vars[] = {
 	WISK_TRACKER_PIPE,
 	WISK_TRACKER_DISABLE_DEEPBIND
 };
+
+typedef struct random_uuid_ {
+    int i1;
+    int i2;
+    int i3;
+    int i4;
+} random_uuid_t;
 
 #define VNAME(x) wisk_env_vars[x]
 
@@ -1013,18 +1021,41 @@ static void  wisk_report_commandcomplete()
 }
 
 
-static int generate_uniqueid(char *str, int millisecond)
+static int generate_uniqueid(char *str)
 {
-	unsigned int i1, i2, i3, i4;
+    FILE *randfile;
+    random_uuid_t random_uuid;
 
-	srandom(millisecond);
-	i1 = random();
-	i2 = random();
-	srandom(getpid());
-	i3 = random();
-	i4 = random();
-	snprintf(str, UUID_SIZE, "%08x-%08x-%08x-%08x", i1, i2, i3, i4);
-	WISK_LOG(WISK_LOG_TRACE, "PID: %d, UniqeID(%s), with %d", getpid(), str, millisecond);
+//    struct timespec epochtime;
+//	unsigned int i1, i2, i3, i4;
+//    clock_gettime(CLOCK_REALTIME, &epochtime);
+//	srandom(epochtime.tv_sec);
+//	i1 = random();
+//	srandom(epochtime.tv_nsec);
+//	i2 = random();
+//	srandom(getpid());
+//	i3 = random();
+//	srandom(getppid());
+//	i4 = random();
+//    getrandom(&random_uuid, sizeof(random_uuid), 0);
+//
+//	struct timeb ctime;
+//	ftime(&ctime);
+//    srandom(ctime.millitm);
+//    i1 = random();
+//    i2 = random();
+//    srandom(getpid());
+//    i3 = random();
+//    i4 = random();
+//    snprintf(str, UUID_SIZE, "%08x-%08x-%08x-%08x", i1, i2, i3, i4);
+
+    randfile = fopen("/dev/urandom", "rb");
+    fread(&random_uuid, sizeof(random_uuid), 1, randfile);
+    fclose(randfile);
+    snprintf(str, UUID_SIZE, "%08x-%08x-%08x-%08x", random_uuid.i1, random_uuid.i2, random_uuid.i3, random_uuid.i4);
+    WISK_LOG(WISK_LOG_TRACE, "Random UniqeID(%s)", str);
+//	WISK_LOG(WISK_LOG_TRACE, "Seconds: %d, Nanoseconds: %d, PID: %d, PPID: %d, UniqeID(%s)", epochtime.tv_sec, epochtime.tv_nsec, getpid(), getppid(), str);
+//    WISK_LOG(WISK_LOG_TRACE, "PID: %d, UniqeID(%s), with %d", getpid(), str, millisecond);
 }
 
 static int envcmp(const char *env, const char *var)
@@ -1224,11 +1255,9 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 {
 	char *uuidstr, *puuidstr;
 	int ret, i;
-	struct timeb ctime;
 
-	ftime(&ctime);
 	wisk_mutex_lock(&fs_tracker_pipe_mutex);
-    generate_uniqueid(fs_tracker_uuid, ctime.millitm);
+    generate_uniqueid(fs_tracker_uuid);
 	uuidstr = getenv(WISK_TRACKER_UUID);
     if (uuidstr) {
         strncpy(fs_tracker_puuid, uuidstr, UUID_SIZE);
