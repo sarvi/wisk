@@ -1012,11 +1012,16 @@ static void  wisk_report_command()
 static void  wisk_report_commandcomplete()
 {
     int msglen;
-    char *listp[] = {NULL};
+    char *listp[] = {NULL, NULL, NULL};
+    char pbuf[PATH_MAX], ppbuf[PATH_MAX];
     char msgbuffer[BUFFER_SIZE];
 
     if (fs_tracker_pipe < 0)
     	return;
+    listp[0] = ppbuf;
+    listp[1] = pbuf;
+    snprintf(pbuf, PATH_MAX, "%d", getpid());
+    snprintf(ppbuf, PATH_MAX, "%d", getppid());
     wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMPLETE", listp);
 }
 
