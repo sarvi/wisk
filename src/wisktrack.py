@@ -419,6 +419,7 @@ def read_raw_data(args):
             extractfile.write(l)
     if args.extract and not uuid_list_complete(args, root):
         print('Re-Reading Raw data to complete extraction')
+        ProgramNode.progtree={}
         return read_raw_data(args) 
     return root, count 
 
