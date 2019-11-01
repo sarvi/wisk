@@ -377,25 +377,37 @@ def expand_environment(program=None):
         expand_environment(p)
         
 
+def uuid_list_complete(args, root):
+    rv = True 
+    for i in args.extract: 
+        for j in getuuidsabove(i):
+            if j not in args.extract:
+                args.extract.append(j)
+                rv = False
+    return rv
+
+
 @utils.timethis
 def read_raw_data(args):
     print('Reading Raw Data: %s' %(args.trackfile + '.raw'))
     ifile = open(args.trackfile + '.raw')
     extractfile=None
     if args.extract:
-        print('Extracting Filtered Data: %s' % (args.trackfile+'.extract'))
-        extractfile = open(args.trackfile+'.extract', 'w')
+        print('Extracting Filtered Data: %s' % (args.trackfile+'.ext.raw'))
+        extractfile = open(args.trackfile+'.ext.raw', 'w')
     root = ProgramNode(WISK_TRACKER_UUID).complete=True
     count = 0
     line = 0
-    for l in ifile.readlines():
+#    for l in ifile.readlines():
+    while True:
+        l = ifile.readline()
+        if not l:
+            break
         line += 1
         print("\rReading %d ..." % (line), end='')
         log.debug('(%s)', l)
         parts = l.split(' ',2)
         uuid = parts[0]
-        if args.extract and uuid not in args.extract:
-            continue
         operation = parts[1].strip()
         data = parts[2]
         if operation=='CALLS':
@@ -403,8 +415,11 @@ def read_raw_data(args):
             count += 1
         else:
             ProgramNode.add_operation(uuid, operation, data)
-        if extractfile:
+        if extractfile and uuid not in args.extract:
             extractfile.write(l)
+    if args.extract and not uuid_list_complete(args, root):
+        print('Re-Reading Raw data to complete extraction')
+        return read_raw_data(args) 
     return root, count 
 
 @utils.timethis
@@ -500,7 +515,7 @@ def dotrack(args):
         root, _ = read_raw_data(args)
     if args.clean:
         clean_data(args, root)
-        wrteout_commands(args, root)
+        extract_commands(args, root)
     if args.show:
         filetoshow = args.trackfile + ('.cmds' if args.clean else '.raw')
         for line in open(filetoshow):
@@ -528,7 +543,7 @@ def configparse(configfile):
     global CONFIG
     config = configparser.ConfigParser(defaults=CONFIG_DEFAULTS, interpolation=configparser.BasicInterpolation())
     print('Reading Config: %s' % (configfile))
-    config.read(configfile)
+    config.read(configfile if os.path.exists(configfile) else os.path.join(env.CONFIG_DIR, 'wisk_parser.cfg'))
     CONFIG = {}
     for secname, secproxy in config.items():
         CONFIG[secname] = {}
@@ -564,7 +579,7 @@ def partialparse(parser):
         CONFIG_DEFAULTS[k]=v
     if not isinstance(args.extract, list):
         args.extract = args.extract.split(',')
-    if args.extract and "XXXXXXXX-XXXXXXXX-XXXXXXXX" not in args.exgtract:
+    if args.extract and "XXXXXXXX-XXXXXXXX-XXXXXXXX" not in args.extract:
         args.extract.insert(0, 'XXXXXXXX-XXXXXXXX-XXXXXXXX')
     return args
    
