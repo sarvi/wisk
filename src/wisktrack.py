@@ -24,6 +24,7 @@ import subprocess
 import re
 import configparser
 import itertools
+import shutil
 from functools import partial
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
@@ -163,9 +164,9 @@ def getuuidsabove(uuid, include=True):
     l = []
     if include:
         l.append(uuid)
-    pn = ProgramNode.progtrwee[uuid].parent
+    pn = ProgramNode.progtree[uuid].parent
     while pn:
-        l.append(pn.uuid)
+        l.insert(0, pn.uuid)
         pn = pn.parent
     return l
 
@@ -174,7 +175,7 @@ def getuuidsbelow(uuid, include=True):
     l = []
     if include:
         l.append(uuid)
-    pns = list(ProgramNode.progtrwee[uuid].children)
+    pns = list(ProgramNode.progtree[uuid].children)
     while pns:
         pn = pns.pop(0)
         l.append(pn.uuid)
@@ -212,8 +213,6 @@ class ProgramNode(object):
         for k,v in kwargs.items():
             setattr(self, k,v)
         ProgramNode.count += 1
-#        if uuid in ProgramNode.progtree:
-#            print(str(ProgramNode.progtree[uuid]), str(self))
         ProgramNode.progtree[uuid] = self
 
 
@@ -257,8 +256,6 @@ class ProgramNode(object):
             buffer_name = '_'+operation.lower()+'_buffer'
             opbuffer = getattr(self, buffer_name, '')
             assert not opbuffer, "Data left in the buffer on COMPLETE\n%s" % (opbuffer)
-#        if self.complete:
-#            log.error("Node Already Complete: %s: %s [%s]", self.uuid, self.command_path, ' '.join(self.command))
         self.complete = True
         # Also completes parents  with the same PID/PPID as this one. Usually this is
         # the sub process was by exec without forking a new process.
@@ -266,14 +263,14 @@ class ProgramNode(object):
         while sublist:
             p=sublist.pop(0)
             for i in p.children:
-                if p.pid == self.pid and p.ppid == self.ppid:
+                if i.pid == self.pid and i.ppid == self.ppid:
                     if not p.complete:
 #                        log.error("Completing a non-forked exec parent-process: %s: %s [%s]", p.uuid, p.command_path, ' '.join(p.command))
-                        p.complete = True
-                    sublist.extend(p.children)
+                        i.complete = True
+                    sublist.extend(i.children)
                     break
         p=self.parent
-        while p.pid==self.pid and p.ppid==self.ppid:
+        while p and p.pid==self.pid and p.ppid==self.ppid:
             # log.error("Completing a non-forked exec subprocess: %s: %s [%s]", p.uuid, p.command_path, ' '.join(p.command))
             p.complete = True
             p=p.parent
@@ -301,10 +298,6 @@ class ProgramNode(object):
             opbuffer = opbuffer[:-1] + data[1:]
         else:
             opbuffer = opbuffer + data
-#        if (operation in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith('"]\n')) \
-#            or (operation not in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith('"\n')):
-#            setattr(pn, buffer_name, opbuffer)
-#            return
         data = opbuffer
         setattr(pn, buffer_name, '')
         try:
@@ -312,13 +305,6 @@ class ProgramNode(object):
         except json.decoder.JSONDecodeError as e:
             setattr(pn, buffer_name, opbuffer)
             return
-#            log.error('Error Decoding: %s%s', data, e)
-#            column = re.search(re.compile(r'line 1 column (?P<column>[0-9]+) '), str(e)).group('column')
-#            log.error('Column: %s', column)
-#            column = int(column)
-#            log.error("UUID: %s, Operation: %s", uuid, operation)
-#            log.error("Error at string: %s'%s'%s", data[column-10:column-1], data[column-1], data[column:])
-#            raise
         if operation in ['COMMAND_PATH', 'READS', 'WRITES', 'UNLINK']:
             data = os.path.normpath(data).replace(WSROOT+'/', '')
         elif operation in ['LINKS']:
@@ -328,7 +314,7 @@ class ProgramNode(object):
             data = [i.split('=',1) for i in data]
             data = dict([(i if len(i)==2 else (i[0], '')) for i in data])
             getattr(pn, operation.lower()).update(data)
-            pn.command[0] = shutil.which(pn.command[0], path=pn.environment['PATH'])
+            pn.command[0] = shutil.which(pn.command[0], path=pn.environment.get('PATH', '')) or pn.command[0]
         elif operation in ['COMMAND', 'CALLS', 'PID', 'PPID', 'WORKING_DIRECTORY']:
             setattr(pn, operation.lower(), data)
         elif operation in ['COMMAND_PATH',]:
@@ -346,12 +332,13 @@ class ProgramNode(object):
             node = ProgramNode.progtree[WISK_TRACKER_UUID]
         if not node.complete:
 #             log.error('Incomplete Command: %s %s', node.uuid, node.command_path)
+            WISK_INSIGHT_FILE.write('UUIDS: %s\n' % (','.join(getuuidsabove(node.uuid))))
             WISK_INSIGHT_FILE.write('Incomplete Command: %s %s [%s]\n' % (node.uuid, node.command_path, ' '.join(node.command)))
             for k, v in node.environment.items():
                 if k in ['LD_PRELOAD'] or k.startswith('WISK_'):
                     continue
                 WISK_INSIGHT_FILE.write('%s="%s"\n' % (k, v))
-            WISK_INSIGHT_FILE.write('%s\n' % (' '.join(node.command)))
+            WISK_INSIGHT_FILE.write('\n%s\n\n' % (' '.join(node.command)))
         checkfortooltypeinherit(node)
         for cn in list(node.children):
             ProgramNode.merge_node(cn)
@@ -390,19 +377,24 @@ def expand_environment(program=None):
         expand_environment(p)
         
 
+@utils.timethis
 def read_raw_data(args):
+    print('Reading Raw Data: %s' %(args.trackfile + '.raw'))
+    ifile = open(args.trackfile + '.raw')
     extractfile=None
     if args.extract:
-        extractfile = open(args.tracefile+'.extract', 'w')
-    print('Reading Raw Data: %s' %(args.trackfile + '.raw'))
+        print('Extracting Filtered Data: %s' % (args.trackfile+'.extract'))
+        extractfile = open(args.trackfile+'.extract', 'w')
     root = ProgramNode(WISK_TRACKER_UUID).complete=True
-    ifile = open(args.trackfile + '.raw')
     count = 0
+    line = 0
     for l in ifile.readlines():
+        line += 1
+        print("\rReading %d ..." % (line), end='')
         log.debug('(%s)', l)
         parts = l.split(' ',2)
         uuid = parts[0]
-        if filterlist and uuid not in filterlist:
+        if args.extract and uuid not in args.extract:
             continue
         operation = parts[1].strip()
         data = parts[2]
@@ -415,12 +407,16 @@ def read_raw_data(args):
             extractfile.write(l)
     return root, count 
 
+@utils.timethis
 def clean_data(args, root):
     print('Cleaning Data')
     compact_environment()
     print('Writing cleanedup full dependency data to %s' % (args.trackfile+'.dep'))
     ProgramNode.show_nodes(args.trackfile+'.dep', fields=FIELDS_ALL)
     expand_environment()
+
+@utils.timethis
+def extract_commands(args, root):
     print('Extracting Top level commands ...')
     ProgramNode.merge_node()
     compact_environment()
@@ -454,6 +450,7 @@ def create_reciever():
     log.info('Creating Recieving FIFO Pipe: %s', WISK_TRACKER_PIPE)
     os.mkfifo(WISK_TRACKER_PIPE)
 
+@utils.timethis
 def tracked_run(args):
     retval = None
     log.info('WISK Verbosity: %d', args.verbose-1)
@@ -503,6 +500,7 @@ def dotrack(args):
         root, _ = read_raw_data(args)
     if args.clean:
         clean_data(args, root)
+        wrteout_commands(args, root)
     if args.show:
         filetoshow = args.trackfile + ('.cmds' if args.clean else '.raw')
         for line in open(filetoshow):
@@ -566,6 +564,8 @@ def partialparse(parser):
         CONFIG_DEFAULTS[k]=v
     if not isinstance(args.extract, list):
         args.extract = args.extract.split(',')
+    if args.extract and "XXXXXXXX-XXXXXXXX-XXXXXXXX" not in args.exgtract:
+        args.extract.insert(0, 'XXXXXXXX-XXXXXXXX-XXXXXXXX')
     return args
    
 
