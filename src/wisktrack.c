@@ -1011,17 +1011,21 @@ static void  wisk_report_command()
 
 static void  wisk_report_commandcomplete()
 {
-    int msglen;
-    char *listp[] = {NULL, NULL, NULL};
+    int count;
     char pbuf[PATH_MAX], ppbuf[PATH_MAX];
     char msgbuffer[BUFFER_SIZE];
 
     if (fs_tracker_pipe < 0)
     	return;
-    listp[0] = ppbuf;
-    listp[1] = pbuf;
+    for(count=0; saved_argv[count]; count++); 
+    char *listp[count+3];
     snprintf(pbuf, PATH_MAX, "%d", getpid());
     snprintf(ppbuf, PATH_MAX, "%d", getppid());
+    listp[0] = ppbuf;
+    listp[1] = pbuf;
+    for(count=2; saved_argv[count-2]; count++)
+        listp[count] = saved_argv[count-2]; 
+    listp[count] = saved_argv[count-2]; 
     wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMPLETE", listp);
 }
 
