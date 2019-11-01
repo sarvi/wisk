@@ -67,6 +67,7 @@ CONFIG_DATATYPES = {
         'buildtool_patterns': (dosplitlist, doregexlist),
         'shelltool_patterns': (dosplitlist, doregexlist),
         'hardtool_patterns': (dosplitlist, doregexlist),
+        'scriptedtool_patterns': (dosplitlist, doregexlist),
         }
 }
 
@@ -157,6 +158,29 @@ def tojson(o, fields=None):
         return dict((k,v) for k,v in o if k in fields)
     else:
         return dict(o)
+
+def getuuidsabove(uuid, include=True):
+    l = []
+    if include:
+        l.append(uuid)
+    pn = ProgramNode.progtrwee[uuid].parent
+    while pn:
+        l.append(pn.uuid)
+        pn = pn.parent
+    return l
+
+
+def getuuidsbelow(uuid, include=True):
+    l = []
+    if include:
+        l.append(uuid)
+    pns = list(ProgramNode.progtrwee[uuid].children)
+    while pns:
+        pn = pns.pop(0)
+        l.append(pn.uuid)
+        pns.extend(pn.children)
+    return l
+
 
 class ProgramNode(object):
     progtree = {}
@@ -304,6 +328,7 @@ class ProgramNode(object):
             data = [i.split('=',1) for i in data]
             data = dict([(i if len(i)==2 else (i[0], '')) for i in data])
             getattr(pn, operation.lower()).update(data)
+            pn.command[0] = shutil.which(pn.command[0], path=pn.environment['PATH'])
         elif operation in ['COMMAND', 'CALLS', 'PID', 'PPID', 'WORKING_DIRECTORY']:
             setattr(pn, operation.lower(), data)
         elif operation in ['COMMAND_PATH',]:
@@ -319,14 +344,14 @@ class ProgramNode(object):
     def merge_node(cls, node=None):
         if node is None:
             node = ProgramNode.progtree[WISK_TRACKER_UUID]
-#         if not node.complete:
+        if not node.complete:
 #             log.error('Incomplete Command: %s %s', node.uuid, node.command_path)
-#             WISK_INSIGHT_FILE.write('Incomplete Command: %s %s [%s]\n' % (node.uuid, node.command_path, ' '.join(node.command)))
-#             for k, v in node.environment.items():
-#                 if k in ['LD_PRELOAD'] or k.startswith('WISK_'):
-#                     continue
-#                 WISK_INSIGHT_FILE.write('%s="%s"\n' % (k, v))
-#             WISK_INSIGHT_FILE.write('%s\n' % (' '.join(node.command)))
+            WISK_INSIGHT_FILE.write('Incomplete Command: %s %s [%s]\n' % (node.uuid, node.command_path, ' '.join(node.command)))
+            for k, v in node.environment.items():
+                if k in ['LD_PRELOAD'] or k.startswith('WISK_'):
+                    continue
+                WISK_INSIGHT_FILE.write('%s="%s"\n' % (k, v))
+            WISK_INSIGHT_FILE.write('%s\n' % (' '.join(node.command)))
         checkfortooltypeinherit(node)
         for cn in list(node.children):
             ProgramNode.merge_node(cn)
@@ -355,6 +380,7 @@ def compact_environment(program=None):
         parent = p.parent
         p.environment = {k:v for k,v in p.environment.items() if k not in parent.environment}            
 
+
 def expand_environment(program=None):
     if program is None:
         program = ProgramNode.progtree[WISK_TRACKER_UUID]
@@ -364,15 +390,20 @@ def expand_environment(program=None):
         expand_environment(p)
         
 
-def clean_data(args):
-    print('Extracting and Cleaning Data')
-    ProgramNode(WISK_TRACKER_UUID).complete=True
+def read_raw_data(args):
+    extractfile=None
+    if args.extract:
+        extractfile = open(args.tracefile+'.extract', 'w')
+    print('Reading Raw Data: %s' %(args.trackfile + '.raw'))
+    root = ProgramNode(WISK_TRACKER_UUID).complete=True
     ifile = open(args.trackfile + '.raw')
     count = 0
     for l in ifile.readlines():
         log.debug('(%s)', l)
         parts = l.split(' ',2)
         uuid = parts[0]
+        if filterlist and uuid not in filterlist:
+            continue
         operation = parts[1].strip()
         data = parts[2]
         if operation=='CALLS':
@@ -380,6 +411,12 @@ def clean_data(args):
             count += 1
         else:
             ProgramNode.add_operation(uuid, operation, data)
+        if extractfile:
+            extractfile.write(l)
+    return root, count 
+
+def clean_data(args, root):
+    print('Cleaning Data')
     compact_environment()
     print('Writing cleanedup full dependency data to %s' % (args.trackfile+'.dep'))
     ProgramNode.show_nodes(args.trackfile+'.dep', fields=FIELDS_ALL)
@@ -462,8 +499,10 @@ def dotrack(args):
         result = tracked_run(args)
         delete_reciever(reciever)
         print(result)
+    if args.extract or args.clean:
+        root, _ = read_raw_data(args)
     if args.clean:
-        clean_data(args)
+        clean_data(args, root)
     if args.show:
         filetoshow = args.trackfile + ('.cmds' if args.clean else '.raw')
         for line in open(filetoshow):
@@ -525,6 +564,8 @@ def partialparse(parser):
         else:
             v = str(v)
         CONFIG_DEFAULTS[k]=v
+    if not isinstance(args.extract, list):
+        args.extract = args.extract.split(',')
     return args
    
 
@@ -573,6 +614,7 @@ Example:
         parser.add_argument('-wsroot', '--wsroot', type=str, default=os.getcwd(), help="Workspace Root")
         parser.add_argument('-trackfile', '--trackfile', type=str, default=os.path.join(os.getcwd(), WISK_DEPDATA), help="Where to output the tracking data")
         parser.add_argument('-config', '--config', type=str, default=WISK_PARSER_CFG, help="WISK Parser Configration")
+        parser.add_argument('-extract', '--extract', type=str, default=[], help="Extract specific nodes Parser Configration")
 
         args = partialparse(parser)
 
