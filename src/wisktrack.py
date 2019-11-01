@@ -78,7 +78,7 @@ CONFIG_DEFAULTS = {
 #    'buildtool_patterns': '',
 }
 
-CONFIG_TOOLS = ['hardtool', 'buildtool', 'shelltool']
+CONFIG_TOOLS = ['buildtool', 'shelltool', 'hardtool']
 
 def match_command_type(node):
     for tool_type in CONFIG_TOOLS:
@@ -86,6 +86,7 @@ def match_command_type(node):
             log.debug('Command Type: %s(pattern)', node.command_path)
             log.debug([i.match(node.command_path) for i in CONFIG['command_type']['%s_patterns'%tool_type]])
             return tool_type
+    return 'hardtool'
     n=node
     tab=''
     outdata=''
@@ -99,7 +100,7 @@ def match_command_type(node):
         UNRECOGNIZED_TOOLS_CXT.append(cmdcxt)
         WISK_INSIGHT_FILE.write(outdata)
         log.error('Unrecognized Program: %s', node.command_path)
-    return None
+    return 'hardtool'
 
 def checkfortooltypeinherit(node):
     if node.command_type == 'shelltool' and any((i.command_type == 'hardtool') for i in node.children):
@@ -163,6 +164,7 @@ class ProgramNode(object):
     
     def __init__(self, uuid, parent=None, **kwargs):
         self.uuid = uuid
+        assert uuid not in ProgramNode.progtree, "Conflicting UUID values"
         if parent is None:
             self.parent = None
         else:
@@ -186,8 +188,8 @@ class ProgramNode(object):
         for k,v in kwargs.items():
             setattr(self, k,v)
         ProgramNode.count += 1
-        if uuid in ProgramNode.progtree:
-            print(str(ProgramNode.progtree[uuid]), str(self))
+#        if uuid in ProgramNode.progtree:
+#            print(str(ProgramNode.progtree[uuid]), str(self))
         ProgramNode.progtree[uuid] = self
 
 
@@ -227,7 +229,30 @@ class ProgramNode(object):
         yield 'invokes', self.children
 
     def node_complete(self):
+        for operation in ['COMMAND', 'ENVIRONMENT', 'COMPLETE']:
+            buffer_name = '_'+operation.lower()+'_buffer'
+            opbuffer = getattr(self, buffer_name, '')
+            assert not opbuffer, "Data left in the buffer on COMPLETE\n%s" % (opbuffer)
+#        if self.complete:
+#            log.error("Node Already Complete: %s: %s [%s]", self.uuid, self.command_path, ' '.join(self.command))
         self.complete = True
+        # Also completes parents  with the same PID/PPID as this one. Usually this is
+        # the sub process was by exec without forking a new process.
+        sublist = [self]
+        while sublist:
+            p=sublist.pop(0)
+            for i in p.children:
+                if p.pid == self.pid and p.ppid == self.ppid:
+                    if not p.complete:
+#                        log.error("Completing a non-forked exec parent-process: %s: %s [%s]", p.uuid, p.command_path, ' '.join(p.command))
+                        p.complete = True
+                    sublist.extend(p.children)
+                    break
+        p=self.parent
+        while p.pid==self.pid and p.ppid==self.ppid:
+            # log.error("Completing a non-forked exec subprocess: %s: %s [%s]", p.uuid, p.command_path, ' '.join(p.command))
+            p.complete = True
+            p=p.parent
 
     @classmethod
     def getorcreate(cls, uuid, parent=None, **kwargs):
@@ -252,21 +277,24 @@ class ProgramNode(object):
             opbuffer = opbuffer[:-1] + data[1:]
         else:
             opbuffer = opbuffer + data
-        if (operation in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith(']\n')) \
-            or (operation not in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith('"\n')):
-            setattr(pn, buffer_name, opbuffer)
-            return
+#        if (operation in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith('"]\n')) \
+#            or (operation not in ['ENVIRONMENT', 'COMMAND', 'LINKS', 'COMPLETE'] and not data.endswith('"\n')):
+#            setattr(pn, buffer_name, opbuffer)
+#            return
         data = opbuffer
         setattr(pn, buffer_name, '')
         try:
             data = json.loads(opbuffer)
         except json.decoder.JSONDecodeError as e:
-            log.error('Error Decoding: %s%s', data, e)
-            column = re.search(re.compile(r'line 1 column (?P<column>[0-9]+) '), str(e)).group('column')
-            log.error('Column: %s', column)
-            column = int(column)
-            log.error("Error at string: %s'%s'%s", data[column-10:column-1], data[column-1], data[column:])
-            raise
+            setattr(pn, buffer_name, opbuffer)
+            return
+#            log.error('Error Decoding: %s%s', data, e)
+#            column = re.search(re.compile(r'line 1 column (?P<column>[0-9]+) '), str(e)).group('column')
+#            log.error('Column: %s', column)
+#            column = int(column)
+#            log.error("UUID: %s, Operation: %s", uuid, operation)
+#            log.error("Error at string: %s'%s'%s", data[column-10:column-1], data[column-1], data[column:])
+#            raise
         if operation in ['COMMAND_PATH', 'READS', 'WRITES', 'UNLINK']:
             data = os.path.normpath(data).replace(WSROOT+'/', '')
         elif operation in ['LINKS']:
@@ -291,9 +319,14 @@ class ProgramNode(object):
     def merge_node(cls, node=None):
         if node is None:
             node = ProgramNode.progtree[WISK_TRACKER_UUID]
-        if not node.complete:
-            log.error('Incomplete Command: %s [%s]', node.command_path, ' '.join(node.command))
-            WISK_INSIGHT_FILE.write('Incomplete Command: %s [%s]' % (node.command_path, ' '.join(node.command)))
+#         if not node.complete:
+#             log.error('Incomplete Command: %s %s', node.uuid, node.command_path)
+#             WISK_INSIGHT_FILE.write('Incomplete Command: %s %s [%s]\n' % (node.uuid, node.command_path, ' '.join(node.command)))
+#             for k, v in node.environment.items():
+#                 if k in ['LD_PRELOAD'] or k.startswith('WISK_'):
+#                     continue
+#                 WISK_INSIGHT_FILE.write('%s="%s"\n' % (k, v))
+#             WISK_INSIGHT_FILE.write('%s\n' % (' '.join(node.command)))
         checkfortooltypeinherit(node)
         for cn in list(node.children):
             ProgramNode.merge_node(cn)
