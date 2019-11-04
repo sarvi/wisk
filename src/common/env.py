@@ -574,7 +574,7 @@ def logging_setup(verbosity, corridfilter=None, onlyerrorlogs=False):  # pylint:
     ENVIRONMENT['consoleloghandler'].addFilter(corridfilter)
     ENVIRONMENT['consoleloghandler'].setLevel(consoleloglevel)
     if doclientcfg:
-        if verbosity >= 3:
+        if verbosity >= 4:
             cformat = MicroFormatter(VERBOSE_FMT_CORR_ID)
         else:
             cformat = MicroFormatter(SIMPLE_FMT)

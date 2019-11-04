@@ -68,7 +68,7 @@ CONFIG_DATATYPES = {
         'buildtool_patterns': (dosplitlist, doregexlist),
         'shelltool_patterns': (dosplitlist, doregexlist),
         'hardtool_patterns': (dosplitlist, doregexlist),
-        'scriptedtool_patterns': (dosplitlist, doregexlist),
+        'interptool_patterns': (dosplitlist, doregexlist),
         }
 }
 
@@ -82,70 +82,6 @@ CONFIG_DEFAULTS = {
 
 CONFIG_TOOLS = ['buildtool', 'shelltool', 'hardtool']
 
-def match_command_type(node):
-    for tool_type in CONFIG_TOOLS:
-        if any(i.match(node.command_path) for i in CONFIG['command_type']['%s_patterns'%tool_type]):
-            log.debug('Command Type: %s(pattern)', node.command_path)
-            log.debug([i.match(node.command_path) for i in CONFIG['command_type']['%s_patterns'%tool_type]])
-            return tool_type
-    return 'hardtool'
-    n=node
-    tab=''
-    outdata=''
-    cmdcxt=[]
-    while n.uuid != WISK_TRACKER_UUID:
-        cmdcxt.append(n.command_path)
-        outdata = outdata + '%s%s [%s]\n' % (tab, n.command_path, ' '.join(n.command))
-        tab=tab+'    '
-        n = n.parent
-    if cmdcxt not in UNRECOGNIZED_TOOLS_CXT:
-        UNRECOGNIZED_TOOLS_CXT.append(cmdcxt)
-        WISK_INSIGHT_FILE.write(outdata)
-        log.error('Unrecognized Program: %s', node.command_path)
-    return 'hardtool'
-
-def checkfortooltypeinherit(node):
-    if node.command_type == 'shelltool' and any((i.command_type == 'hardtool') for i in node.children):
-        log.debug('Shell-inherits HardTool: %s', node.command_path)
-        node.command_type = 'hardtool'
-    if node.command_type == 'shelltool' and any((i.command_type == 'buildtool') for i in node.children):
-        log.debug('Shell-inherits BuildTool: %s', node.command_path)
-        node.command_type = 'buildtool'
-
-def checkformerge(node):
-    if node.uuid == WISK_TRACKER_UUID:
-        log.debug('Root: Skip Merging')
-        return False
-    if node.parent.uuid == WISK_TRACKER_UUID:
-        log.debug('Top-Tool: Skip Merging %s', node.command)
-        return False
-    if node.command_type is None:
-        log.debug('Not-Tool: Merging %s', node.command)
-        return True
-    if node.command_type in ['hardtool'] and node.parent.command_type in ['hardtool']:
-        log.debug('HardTool-by-HardTool: Merging %s child-of %s', node.command, node.parent.command)
-        return True
-    if node.command_type in ['hardtool'] and node.parent.command_type in ['shelltool']:
-        log.debug('ShellTool-by-HardTool: Merging %s child-of %s', node.command, node.parent.command)
-        return True
-    if node.command_type in ['buildtool'] and node.parent.command_type in ['buildtool']:
-        log.debug('BuildTool-by-BuildTool: Merging %s child-of %s', node.command, node.parent.command)
-        return True
-    if node.command_type in ['buildtool'] and node.parent.command_type in ['shelltool']:
-        log.debug('Shell-by-BuildTool: Merging %s child-of %s', node.command, node.parent.command)
-        return True
-    return False
-
-def domerge(node):
-    assert node.uuid != WISK_TRACKER_UUID and node.parent.uuid != WISK_TRACKER_UUID
-    for cn in node.children:
-        cn.parent = node.parent
-        cn.parent.children.append(cn)
-    node.parent.children.remove(node)
-    node.parent.mergedcommands.append(node)
-    node.parent = None
-    node.children = []
-    node.filteredout = True
 
 def filterlistpaths(paths):
     r=[]
@@ -200,7 +136,7 @@ class ProgramNode(object):
         self.complete = False
         self.environment = {}
         self.children = []
-        self.operations = []
+        self.operations = {}
         self.pid = None
         self.ppid = None
         self.command_type = None
@@ -251,6 +187,89 @@ class ProgramNode(object):
         yield 'children', len(self.children)
         yield 'invokes', self.children
 
+
+    def match_command_type(self):
+        command = self.command[0]
+        for tool_type in CONFIG_TOOLS:
+            if any(i.match(command) for i in CONFIG['command_type']['%s_patterns'%tool_type]):
+                log.debug('Command Type: %s(pattern)', command)
+                log.debug([i.match(command) for i in CONFIG['command_type']['%s_patterns'%tool_type]])
+                self.command_type = tool_type
+                return self.command_type
+#        return 'hardtool'
+        n=self
+        tab=''
+        outdata=''
+        cmdcxt=[]
+        while n.uuid != WISK_TRACKER_UUID:
+            cmdcxt.append(command)
+            outdata = outdata + ('{!s}{!s:<.20} [{!r:<.150}]\n'.format(tab, os.path.basename(n.command_path), ' '.join(n.command)))
+            tab=tab+'    '
+            n = n.parent
+        if cmdcxt not in UNRECOGNIZED_TOOLS_CXT:
+            UNRECOGNIZED_TOOLS_CXT.append(cmdcxt)
+            WISK_INSIGHT_FILE.write(outdata)
+            log.info('Unrecognized Program: %s', self.command)
+        self.command_type = 'hardtool'
+        return self.command_type
+
+    def checkfortooltypeinherit(self):
+        if self.command_type == 'shelltool' and any((i.command_type == 'hardtool') for i in self.children):
+            log.debug('Shell-inherits HardTool: %s', self.command_path)
+            self.command_type = 'hardtool'
+        if self.command_type == 'shelltool' and any((i.command_type == 'buildtool') for i in self.children):
+            log.debug('Shell-inherits BuildTool: %s', self.command_path)
+            self.command_type = 'buildtool'
+    
+    def checkformerge(self):
+        if self.uuid == WISK_TRACKER_UUID:
+            log.debug('Root: Skip Merging')
+            return False
+        if self.parent.uuid == WISK_TRACKER_UUID:
+            log.debug('Top-Tool: Skip Merging %s', self.command)
+            return False
+        if self.command_type is None:
+            log.debug('Not-Tool: Merging %s', self.command)
+            return True
+        if self.command_type in ['hardtool'] and self.parent.command_type in ['hardtool']:
+            log.debug('HardTool-by-HardTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+            return True
+        if self.command_type in ['hardtool'] and self.parent.command_type in ['shelltool']:
+            log.debug('ShellTool-by-HardTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+            return True
+        if self.command_type in ['buildtool'] and self.parent.command_type in ['buildtool']:
+            log.debug('BuildTool-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+            return True
+        if self.command_type in ['buildtool'] and self.parent.command_type in ['shelltool']:
+            log.debug('Shell-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+            return True
+        return False
+
+    def command_clean(self):
+        interptool = CONFIG['command_type']['interptool_patterns']
+        command = ' '.join(self.command)
+        for p in interptool:
+            m = p.match(command)
+            if m and m.lastindex is not None:
+                log.info('InterpTool: %s -> %s' % (' '.join(self.command[:m.lastindex+1]), self.command[m.lastindex]))
+                for i in m.groups():
+                   if i: self.command.pop(0)
+                break
+        self.command[0] = shutil.which(self.command[0], path=self.environment.get('PATH', '')) or self.command[0]
+        self.match_command_type()
+         
+
+    def domerge(self):
+        assert self.uuid != WISK_TRACKER_UUID and self.parent.uuid != WISK_TRACKER_UUID
+        for cn in self.children:
+            cn.parent = self.parent
+            cn.parent.children.append(cn)
+        self.parent.children.remove(self)
+        self.parent.mergedcommands.append(self)
+        self.parent = None
+        self.children = []
+        self.filteredout = True
+
     def node_complete(self):
         for operation in ['COMMAND', 'ENVIRONMENT', 'COMPLETE']:
             buffer_name = '_'+operation.lower()+'_buffer'
@@ -278,11 +297,11 @@ class ProgramNode(object):
     @classmethod
     def getorcreate(cls, uuid, parent=None, **kwargs):
         if uuid not in cls.progtree:
-            prog = ProgramNode(uuid, parent, **kwargs)
+            prog = cls(uuid, parent, **kwargs)
         else:
-            prog = ProgramNode.progtree[uuid]
+            prog = cls.progtree[uuid]
         if parent:
-            prog.parent = ProgramNode.getorcreate(parent)
+            prog.parent = cls.getorcreate(parent)
             prog.parent.children.append(prog)
         return prog
 
@@ -290,20 +309,20 @@ class ProgramNode(object):
     @classmethod
     def add_operation(cls, uuid, operation, data, buffer=False):
         if uuid not in cls.progtree:
-            ProgramNode(uuid)
-        pn = cls.progtree[uuid]
+            cls(uuid)
+        node = cls.progtree[uuid]
         buffer_name = '_'+operation.lower()+'_buffer'
-        opbuffer = getattr(pn, buffer_name, '')
+        opbuffer = getattr(node, buffer_name, '')
         if opbuffer:
             opbuffer = opbuffer[:-1] + data[1:]
         else:
             opbuffer = opbuffer + data
         data = opbuffer
-        setattr(pn, buffer_name, '')
+        setattr(node, buffer_name, '')
         try:
             data = json.loads(opbuffer)
         except json.decoder.JSONDecodeError as e:
-            setattr(pn, buffer_name, opbuffer)
+            setattr(node, buffer_name, opbuffer)
             return
         if operation in ['COMMAND_PATH', 'READS', 'WRITES', 'UNLINK']:
             data = os.path.normpath(data).replace(WSROOT+'/', '')
@@ -313,23 +332,39 @@ class ProgramNode(object):
             data = [i for i in data if not (i.startswith('WISK_') or i.startswith('LD_PRELOAD'))]
             data = [i.split('=',1) for i in data]
             data = dict([(i if len(i)==2 else (i[0], '')) for i in data])
-            getattr(pn, operation.lower()).update(data)
-            pn.command[0] = shutil.which(pn.command[0], path=pn.environment.get('PATH', '')) or pn.command[0]
+            getattr(node, operation.lower()).update(data)
+            node.command_clean()
         elif operation in ['COMMAND', 'CALLS', 'PID', 'PPID', 'WORKING_DIRECTORY']:
-            setattr(pn, operation.lower(), data)
+            setattr(node, operation.lower(), data)
         elif operation in ['COMMAND_PATH',]:
-            setattr(pn, operation.lower(), data)
+            setattr(node, operation.lower(), data)
         elif operation in ['COMPLETE']:
-            pn.command_type = match_command_type(pn)
-            pn.node_complete()
+            node.node_complete()
         else:
-            pn.operations.append((operation, data))
+            node.operations.setdefault(operation, [])
+            if data not in node.operations[operation]:
+                node.operations[operation].append(data)
 
+
+    @classmethod
+    def prune_tree(cls, program=None):
+        if program is None:
+            program = cls.progtree[WISK_TRACKER_UUID]
+        for p in list(program.children):
+            if p.uuid == WISK_TRACKER_UUID:
+                continue
+            if p.command is None:
+                p.parent.children.remove(p)
+                cls.progtree.pop(p.uuid)
+                continue
+            cls.prune_tree(p)
+        
 
     @classmethod
     def merge_node(cls, node=None):
         if node is None:
-            node = ProgramNode.progtree[WISK_TRACKER_UUID]
+            node = cls.progtree[WISK_TRACKER_UUID]
+        print('Merging: %s' % node)
         if not node.complete:
 #             log.error('Incomplete Command: %s %s', node.uuid, node.command_path)
             WISK_INSIGHT_FILE.write('UUIDS: %s\n' % (','.join(getuuidsabove(node.uuid))))
@@ -339,61 +374,72 @@ class ProgramNode(object):
                     continue
                 WISK_INSIGHT_FILE.write('%s="%s"\n' % (k, v))
             WISK_INSIGHT_FILE.write('\n%s\n\n' % (' '.join(node.command)))
-        checkfortooltypeinherit(node)
+#        node.checkfortooltypeinherit()
         for cn in list(node.children):
-            ProgramNode.merge_node(cn)
-        if checkformerge(node):
-            node.parent.operations.extend(node.operations)
+            cls.merge_node(cn)
+        if node.checkformerge():
+            for k,v in node.operations.items():
+                node.parent.operations.setdefault(k, [])
+                for i in v:
+                    if i not in node.parent.operations[k]:
+                        node.parent.operations[k].append(i)
+#            node.parent.operations.update(node.operations)
             node.operations=[]
-            domerge(node)
+            node.domerge()
             node.tobemerged = True
-        if not node.children:
-            node.operations={k:filterlistpaths([i[1] for i in g]) for k, g in itertools.groupby(sorted(node.operations, key=lambda i: i[0]), lambda x: x[0])}
+#        if not node.children:
+#            node.operations={k:filterlistpaths([i[1] for i in g]) for k, g in itertools.groupby(sorted(node.operations, key=lambda i: i[0]), lambda x: x[0])}
             
 
     @classmethod        
-    def show_nodes(cls, ofile, node=None, fields=None):
+    def show_nodes(cls, ofile=sys.stdout, node=None, fields=None):
         if node is None:
-            node = ProgramNode.progtree[WISK_TRACKER_UUID].children[0]
+            node = cls.progtree[WISK_TRACKER_UUID].children[0]
         fields = fields or CONFIG['DEFAULT']['filterfields']
-        json.dump(node, open(ofile, 'w'), default=partial(tojson, fields=fields), indent=2, sort_keys=True)
+        if isinstance(ofile, str):
+            ofile = open(ofile, 'w')
+        json.dump(node, ofile, default=partial(tojson, fields=fields), indent=2, sort_keys=True)
 
       
-def compact_environment(program=None):
-    if program is None:
-        program = ProgramNode.progtree[WISK_TRACKER_UUID]
-    for p in program.children:
-        compact_environment(p)
-        parent = p.parent
-        p.environment = {k:v for k,v in p.environment.items() if k not in parent.environment}            
+    @classmethod        
+    def compact_environment(cls, program=None):
+        if program is None:
+            program = cls.progtree[WISK_TRACKER_UUID]
+        for p in program.children:
+            cls.compact_environment(p)
+            parent = p.parent
+            p.environment = {k:v for k,v in p.environment.items() if k not in parent.environment}            
 
 
-def expand_environment(program=None):
-    if program is None:
-        program = ProgramNode.progtree[WISK_TRACKER_UUID]
-    for p in program.children:
-        parent = p.parent
-        p.environment = {**p.environment, **parent.environment}            
-        expand_environment(p)
+    @classmethod        
+    def expand_environment(cls, program=None):
+        if program is None:
+            program = cls.progtree[WISK_TRACKER_UUID]
+        for p in program.children:
+            parent = p.parent
+            p.environment = {**p.environment, **parent.environment}            
+            cls.expand_environment(p)
         
+
 
 def uuid_list_complete(args, root):
     rv = True 
-    for i in args.extract: 
+    for i in list(args.extract): 
         for j in getuuidsabove(i):
             if j not in args.extract:
+#                print('Missing: %s' % j)
                 args.extract.append(j)
                 rv = False
     return rv
 
 
 @utils.timethis
-def read_raw_data(args):
+def read_raw_data(args, debug=False):
     print('Reading Raw Data: %s' %(args.trackfile + '.raw'))
     ifile = open(args.trackfile + '.raw')
     extractfile=None
     if args.extract:
-        print('Extracting Filtered Data: %s' % (args.trackfile+'.ext.raw'))
+        print('Extracting Filtered Data: %s, UUIDs: %s' % (args.trackfile+'.ext.raw', args.extract))
         extractfile = open(args.trackfile+'.ext.raw', 'w')
     root = ProgramNode(WISK_TRACKER_UUID).complete=True
     count = 0
@@ -404,7 +450,8 @@ def read_raw_data(args):
         if not l:
             break
         line += 1
-        print("\rReading %d ..." % (line), end='')
+        if not debug:
+            print("\rReading %d ..." % (line), end='')
         log.debug('(%s)', l)
         parts = l.split(' ',2)
         uuid = parts[0]
@@ -415,27 +462,34 @@ def read_raw_data(args):
             count += 1
         else:
             ProgramNode.add_operation(uuid, operation, data)
-        if extractfile and uuid not in args.extract:
+        if debug and operation in ['CALLS', 'COMMAND', 'COMPLETE']:
+            print(l.rstrip())
+        if extractfile and uuid in args.extract:
+            log.debug('Extracting: [%s]', l)
             extractfile.write(l)
     if args.extract and not uuid_list_complete(args, root):
-        print('Re-Reading Raw data to complete extraction')
-        ProgramNode.progtree={}
-        return read_raw_data(args) 
+        extractfile.close()
+        root=None
+        ProgramNode.progtree.clear()
+        rv = read_raw_data(args, debug=True) 
+        print('\nSuggested Full Extract Option: -extract=%s\n' % (','.join(args.extract)))
+        return rv
     return root, count 
 
 @utils.timethis
 def clean_data(args, root):
     print('Cleaning Data')
-    compact_environment()
+    ProgramNode.prune_tree()
+    ProgramNode.compact_environment()
     print('Writing cleanedup full dependency data to %s' % (args.trackfile+'.dep'))
     ProgramNode.show_nodes(args.trackfile+'.dep', fields=FIELDS_ALL)
-    expand_environment()
+    ProgramNode.expand_environment()
 
 @utils.timethis
 def extract_commands(args, root):
     print('Extracting Top level commands ...')
     ProgramNode.merge_node()
-    compact_environment()
+    ProgramNode.compact_environment()
     print('Writing Top level Commands to %s' % (args.trackfile+'.cmds'))
     ProgramNode.show_nodes(args.trackfile+'.cmds')
 
@@ -580,8 +634,8 @@ def partialparse(parser):
         CONFIG_DEFAULTS[k]=v
     if not isinstance(args.extract, list):
         args.extract = args.extract.split(',')
-    if args.extract and "XXXXXXXX-XXXXXXXX-XXXXXXXX" not in args.extract:
-        args.extract.insert(0, 'XXXXXXXX-XXXXXXXX-XXXXXXXX')
+    if args.extract and WISK_TRACKER_UUID not in args.extract:
+        args.extract.insert(0, WISK_TRACKER_UUID)
     return args
    
 
@@ -648,8 +702,8 @@ Example:
         return 1
     except Exception as ex:  # pylint: disable=locally-disabled, broad-except
         logerror = log.error if init else print
-        logdebug = log.debug if init else print
-        logdebug(traceback.format_exc())
+        logwarn = log.warn if init else print
+        logwarn(traceback.format_exc())
         if not args or not args.verbose:
             err_property = None
             if hasattr(ex, 'message'):
