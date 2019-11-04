@@ -209,7 +209,7 @@ class ProgramNode(object):
         if cmdcxt not in UNRECOGNIZED_TOOLS_CXT:
             UNRECOGNIZED_TOOLS_CXT.append(cmdcxt)
             WISK_INSIGHT_FILE.write(outdata)
-            log.info('Unrecognized Program: %s', self.command)
+            log.info('Unrecognized Program: %.50r', self.command)
         self.command_type = 'hardtool'
         return self.command_type
 
@@ -226,10 +226,10 @@ class ProgramNode(object):
             log.debug('Root: Skip Merging')
             return False
         if self.parent.uuid == WISK_TRACKER_UUID:
-            log.debug('Top-Tool: Skip Merging %s', self.command)
+            log.debug('Top-Tool: Skip Merging %.50r', self.command)
             return False
         if self.command_type is None:
-            log.debug('Not-Tool: Merging %s', self.command)
+            log.debug('Not-Tool: Merging %.50r', self.command)
             return True
         if self.command_type in ['hardtool'] and self.parent.command_type in ['hardtool']:
             log.debug('HardTool-by-HardTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
@@ -364,7 +364,6 @@ class ProgramNode(object):
     def merge_node(cls, node=None):
         if node is None:
             node = cls.progtree[WISK_TRACKER_UUID]
-        print('Merging: %s' % node)
         if not node.complete:
 #             log.error('Incomplete Command: %s %s', node.uuid, node.command_path)
             WISK_INSIGHT_FILE.write('UUIDS: %s\n' % (','.join(getuuidsabove(node.uuid))))
@@ -473,11 +472,13 @@ def read_raw_data(args, debug=False):
         ProgramNode.progtree.clear()
         rv = read_raw_data(args, debug=True) 
         print('\nSuggested Full Extract Option: -extract=%s\n' % (','.join(args.extract)))
-        return rv
-    return root, count 
+        return
+    return
 
 @utils.timethis
-def clean_data(args, root):
+def clean_data(args, root=None):
+    if root is None:
+        root = ProgramNode.progtree[WISK_TRACKER_UUID]
     print('Cleaning Data')
     ProgramNode.prune_tree()
     ProgramNode.compact_environment()
@@ -486,7 +487,9 @@ def clean_data(args, root):
     ProgramNode.expand_environment()
 
 @utils.timethis
-def extract_commands(args, root):
+def extract_commands(args, root=None):
+    if root is None:
+        root = ProgramNode.progtree[WISK_TRACKER_UUID]
     print('Extracting Top level commands ...')
     ProgramNode.merge_node()
     ProgramNode.compact_environment()
@@ -567,10 +570,10 @@ def dotrack(args):
         delete_reciever(reciever)
         print(result)
     if args.extract or args.clean:
-        root, _ = read_raw_data(args)
+        read_raw_data(args)
     if args.clean:
-        clean_data(args, root)
-        extract_commands(args, root)
+        clean_data(args)
+        extract_commands(args)
     if args.show:
         filetoshow = args.trackfile + ('.cmds' if args.clean else '.raw')
         for line in open(filetoshow):

@@ -137,9 +137,10 @@ def timethis(method):
         tstart = time.time()
         result = method(*args, **kw)
         tend = time.time()
+        name = env.ENVIRONMENT['toolname'] if method.__name__ == 'main' else '%s()' % (method.__name__)
         if '-json' not in sys.argv and '--json' not in sys.argv and env.ENVIRONMENT['verbosity'] > 0:
             print("Run time({}) {} {}    ({:05.2f} seconds)".format(
-                env.ENVIRONMENT['toolname'], 'SUCCESS' if result == 0 else 'FAILURE', formattimedelta(tend - tstart), tend - tstart))
+                name, 'SUCCESS' if result is None or result == 0 else 'FAILURE', formattimedelta(tend - tstart), tend - tstart))
         return result
     return timethis_wrapper
 
