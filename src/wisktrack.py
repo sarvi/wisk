@@ -52,6 +52,7 @@ WISK_DEPDATA='wisk_depdata'
 WISK_PARSER_CFG='wisk_parser.cfg'
 WISK_INSIGHT_FILENAME='wisk_insight.data'
 WISK_INSIGHT_FILE=None
+WISK_ARGS=None
 UNRECOGNIZED_TOOLS_CXT = []
 FIELDS_ALL = ['UUID', 'P-UUID', 'PID', 'PPID', 'WORKING_DIRECTORY', 'OPERATIONS', 'COMMAND', 'COMMAND_PATH', 
               'ENVIRONMENT', 'COMPLETE', 'command_type', 'children', 'WSROOT', 'invokes', 'mergedcommands']
@@ -59,16 +60,20 @@ FIELDS_ALL = ['UUID', 'P-UUID', 'PID', 'PPID', 'WORKING_DIRECTORY', 'OPERATIONS'
 CONFIG = None
 dosplitlist = lambda x: [i.strip() for i in x.split()]
 doregexlist = lambda x: [re.compile(i) for i in x]
+doregexpatternlist = lambda x: [i.pattern for i in x]
+dojoinlist = lambda x: '\n    '.join(x)
+
+CONFIGPARSER = None
 CONFIG_DATATYPES = {
 #     'DEFAULT': {
-#         'filterfields': (dosplitlist,),
+#         'filterfields': ((dosplitlist,), (lambda x: ' '.join(x),)),
 #         },
     'command_type': {
-        'filterfields': (dosplitlist,),
-        'buildtool_patterns': (dosplitlist, doregexlist),
-        'shelltool_patterns': (dosplitlist, doregexlist),
-        'hardtool_patterns': (dosplitlist, doregexlist),
-        'interptool_patterns': (dosplitlist, doregexlist),
+        'filterfields': ((dosplitlist,), (lambda x: ' '.join(x),)),
+        'buildtool_patterns': ((dosplitlist, doregexlist), (doregexpatternlist, dojoinlist)),
+        'shelltool_patterns': ((dosplitlist, doregexlist), (doregexpatternlist, dojoinlist)),
+        'hardtool_patterns':  ((dosplitlist, doregexlist), (doregexpatternlist, dojoinlist)),
+        'interptool_patterns': ((dosplitlist, doregexlist), (doregexpatternlist, dojoinlist)),
         }
 }
 
@@ -141,7 +146,6 @@ class ProgramNode(object):
         self.ppid = None
         self.command_type = None
         self.filteredout = False
-        self.tobemerged = False
         self.mergedcommands=[]
         if parent:
             p = ProgramNode.progtree[parent]
@@ -196,40 +200,81 @@ class ProgramNode(object):
                 log.debug([i.match(command) for i in CONFIG['command_type']['%s_patterns'%tool_type]])
                 self.command_type = tool_type
                 return self.command_type
-#        return 'hardtool'
         n=self
         tab=''
         outdata=''
         cmdcxt=[]
         while n.uuid != WISK_TRACKER_UUID:
             cmdcxt.append(command)
-            outdata = outdata + ('{!s}{!s:<.20} [{!r:<.150}]\n'.format(tab, os.path.basename(n.command_path), ' '.join(n.command)))
+            outdata = outdata + ('{!s} {!s} {!s} {!s:<.20} [{!r:<.100}]\n'.format(tab, n.command_type, n.uuid, os.path.basename(n.command_path), ' '.join(n.command)))
+            tab=tab+'    '
+            n = n.parent
+        print('\n%sUnrecognized Tool: %.150r\n[i]-InterpTool, [b] - Buildtool, [s] - ShellTool, [Enter] - hardtool, [e] - Save/Exit, [q] - Quit' % (outdata, self.command))
+        while True:
+            c = utils.getch()
+            print('"[%d]"' % ord(c))
+            if c in ['i', 'I']:
+                self.command_type = 'interptool'
+            elif c in ['b', 'B']:
+                self.command_type = 'buildtool'
+            elif c in ['s', 'S']:
+                self.command_type = 'shelltool'
+            elif ord(c) in [13]:
+                self.command_type = 'hardtool'
+            elif c in ['e', 'E']:
+                configwrite(WISK_ARGS.config)
+                sys.exit('Saving and Exiting...')
+            elif c in ['q', 'Q']:
+                sys.exit('Terminating...')
+            else:
+                continue
+            break
+        print('%s for Tool: %.100r' % (self.command_type, self.command))
+        CONFIG['command_type']['%s_patterns' % self.command_type].append(re.compile(re.escape(command)))
+        return self.command_type
+
+
+    def generate_insight(self, insight_type):
+        if self.uuid == WISK_TRACKER_UUID:
+            return
+        command = self.command[0] or []
+        n=self
+        tab=''
+        outdata=''
+        cmdcxt=[]
+        while n.uuid != WISK_TRACKER_UUID:
+            cmdcxt.append(command)
+            outdata = outdata + ('{!s} {!s} {!s} {!s:<.20} [{!r:<.150}]\n'.format(tab, n.command_type, n.uuid, os.path.basename(n.command_path), ' '.join(n.command)))
             tab=tab+'    '
             n = n.parent
         if cmdcxt not in UNRECOGNIZED_TOOLS_CXT:
             UNRECOGNIZED_TOOLS_CXT.append(cmdcxt)
+            WISK_INSIGHT_FILE.write('UUID: %s : %s\n' % (self.uuid, insight_type))
             WISK_INSIGHT_FILE.write(outdata)
             log.info('Unrecognized Program: %.50r', self.command)
         self.command_type = 'hardtool'
         return self.command_type
 
     def checkfortooltypeinherit(self):
-        if self.command_type == 'shelltool' and any((i.command_type == 'hardtool') for i in self.children):
-            log.debug('Shell-inherits HardTool: %s', self.command_path)
+        if self.command_type == 'shelltool' and all((i.command_type == 'hardtool') for i in self.mergedcommands+self.children):
+            log.debug('Shell-inherits All HardTool: %s', self.command_path)
             self.command_type = 'hardtool'
-        if self.command_type == 'shelltool' and any((i.command_type == 'buildtool') for i in self.children):
-            log.debug('Shell-inherits BuildTool: %s', self.command_path)
+        elif self.command_type == 'shelltool' and all((i.command_type == 'buildtool') for i in self.mergedcommands+self.children):
+            log.debug('Shell-inherits All BuildTool: %s', self.command_path)
             self.command_type = 'buildtool'
     
     def checkformerge(self):
         if self.uuid == WISK_TRACKER_UUID:
             log.debug('Root: Skip Merging')
             return False
+        if self.children:
+            return False
         if self.parent.uuid == WISK_TRACKER_UUID:
             log.debug('Top-Tool: Skip Merging %.50r', self.command)
             return False
         if self.command_type is None:
-            log.debug('Not-Tool: Merging %.50r', self.command)
+            log.error('Not-Tool: Merging %.50r', self.command)
+            self.generate_insight('Command Type None')
             return True
         if self.command_type in ['hardtool'] and self.parent.command_type in ['hardtool']:
             log.debug('HardTool-by-HardTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
@@ -237,12 +282,12 @@ class ProgramNode(object):
         if self.command_type in ['hardtool'] and self.parent.command_type in ['shelltool']:
             log.debug('ShellTool-by-HardTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
             return True
-        if self.command_type in ['buildtool'] and self.parent.command_type in ['buildtool']:
-            log.debug('BuildTool-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
-            return True
-        if self.command_type in ['buildtool'] and self.parent.command_type in ['shelltool']:
-            log.debug('Shell-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
-            return True
+#        if self.command_type in ['buildtool'] and self.parent.command_type in ['buildtool']:
+#            log.debug('BuildTool-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+#            return True
+#        if self.command_type in ['buildtool'] and self.parent.command_type in ['shelltool']:
+#            log.debug('Shell-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+#            return True
         return False
 
     def command_clean(self):
@@ -261,6 +306,13 @@ class ProgramNode(object):
 
     def domerge(self):
         assert self.uuid != WISK_TRACKER_UUID and self.parent.uuid != WISK_TRACKER_UUID
+        log.info('Merging: [%s] %.150r\n   with: [%s] %.150r', self.uuid, self.command, self.uuid, self.parent.command)
+        for k,v in self.operations.items():
+            self.parent.operations.setdefault(k, [])
+            for i in v:
+                if i not in self.parent.operations[k]:
+                    self.parent.operations[k].append(i)
+        self.operations=[]
         for cn in self.children:
             cn.parent = self.parent
             cn.parent.children.append(cn)
@@ -364,30 +416,20 @@ class ProgramNode(object):
     def merge_node(cls, node=None):
         if node is None:
             node = cls.progtree[WISK_TRACKER_UUID]
-        if not node.complete:
+#         if not node.complete:
 #             log.error('Incomplete Command: %s %s', node.uuid, node.command_path)
-            WISK_INSIGHT_FILE.write('UUIDS: %s\n' % (','.join(getuuidsabove(node.uuid))))
-            WISK_INSIGHT_FILE.write('Incomplete Command: %s %s [%s]\n' % (node.uuid, node.command_path, ' '.join(node.command)))
-            for k, v in node.environment.items():
-                if k in ['LD_PRELOAD'] or k.startswith('WISK_'):
-                    continue
-                WISK_INSIGHT_FILE.write('%s="%s"\n' % (k, v))
-            WISK_INSIGHT_FILE.write('\n%s\n\n' % (' '.join(node.command)))
-#        node.checkfortooltypeinherit()
+#             WISK_INSIGHT_FILE.write('UUIDS: %s\n' % (','.join(getuuidsabove(node.uuid))))
+#             WISK_INSIGHT_FILE.write('Incomplete Command: %s %s [%s]\n' % (node.uuid, node.command_path, ' '.join(node.command)))
+#             for k, v in node.environment.items():
+#                 if k in ['LD_PRELOAD'] or k.startswith('WISK_'):
+#                     continue
+#                 WISK_INSIGHT_FILE.write('%s="%s"\n' % (k, v))
+#             WISK_INSIGHT_FILE.write('\n%s\n\n' % (' '.join(node.command)))
         for cn in list(node.children):
             cls.merge_node(cn)
+        node.checkfortooltypeinherit()
         if node.checkformerge():
-            for k,v in node.operations.items():
-                node.parent.operations.setdefault(k, [])
-                for i in v:
-                    if i not in node.parent.operations[k]:
-                        node.parent.operations[k].append(i)
-#            node.parent.operations.update(node.operations)
-            node.operations=[]
             node.domerge()
-            node.tobemerged = True
-#        if not node.children:
-#            node.operations={k:filterlistpaths([i[1] for i in g]) for k, g in itertools.groupby(sorted(node.operations, key=lambda i: i[0]), lambda x: x[0])}
             
 
     @classmethod        
@@ -578,7 +620,7 @@ def dotrack(args):
         filetoshow = args.trackfile + ('.cmds' if args.clean else '.raw')
         for line in open(filetoshow):
             print(line, end='')
-    
+    configwrite(args.config)
     return (result.returncode if result else 0)
 
 
@@ -595,22 +637,39 @@ class CLIError(Exception):
     def __unicode__(self):
         return self.msg
 
+def configwrite(configfile):
+    global CONFIGPARSER
+    for secname, secproxy in CONFIGPARSER.items():
+        for k, v in secproxy.items():
+            dtype = CONFIG_DATATYPES.get(secname, {}).get(k, None)
+            v = CONFIG[secname][k]
+            if dtype is not None:
+                for do_op in dtype[1]:
+                    v = do_op(v)
+            CONFIGPARSER[secname][k] = v
+    print('Saving current config to %s' % (configfile+'.saved'))
+    print('Updating config %s' % (configfile))
+    if os.path.exists(configfile):
+        shutil.copy(configfile, configfile+'.saved')
+    with open(configfile, 'w') as configfile:
+        CONFIGPARSER.write(configfile)
 
 def configparse(configfile):
     ''' Configuration File '''
     global CONFIG
-    config = configparser.ConfigParser(defaults=CONFIG_DEFAULTS, interpolation=configparser.BasicInterpolation())
+    global CONFIGPARSER
+    CONFIGPARSER = configparser.ConfigParser(defaults=CONFIG_DEFAULTS, interpolation=configparser.BasicInterpolation())
     print('Reading Config: %s' % (configfile))
-    config.read(configfile if os.path.exists(configfile) else os.path.join(env.CONFIG_DIR, 'wisk_parser.cfg'))
+    CONFIGPARSER.read(configfile if os.path.exists(configfile) else os.path.join(env.CONFIG_DIR, 'wisk_parser.cfg'))
     CONFIG = {}
-    for secname, secproxy in config.items():
+    for secname, secproxy in CONFIGPARSER.items():
         CONFIG[secname] = {}
         for k, v in secproxy.items():
             CONFIG[secname][k] = v.strip()
             dtype = CONFIG_DATATYPES.get(secname, {}).get(k, None)
             if dtype is None:
                 continue                
-            for do_op in dtype:
+            for do_op in dtype[0]:
                 CONFIG[secname][k] = do_op(CONFIG[secname][k])
 
 def insight_init(args):
@@ -620,6 +679,8 @@ def insight_init(args):
 def partialparse(parser):
     ''' Parse args until first unknown '''
     global WISK_TRACKER_PIPE
+    global WISK_ARGS
+
     if COMMAND_SEPARATOR in sys.argv:
         idx = sys.argv.index(COMMAND_SEPARATOR)
     else:
@@ -639,6 +700,7 @@ def partialparse(parser):
         args.extract = args.extract.split(',')
     if args.extract and WISK_TRACKER_UUID not in args.extract:
         args.extract.insert(0, WISK_TRACKER_UUID)
+    WISK_ARGS = args
     return args
    
 
