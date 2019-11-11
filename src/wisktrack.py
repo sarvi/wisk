@@ -25,6 +25,7 @@ import re
 import configparser
 import itertools
 import shutil
+import pdb
 from functools import partial
 from argparse import ArgumentParser
 from argparse import RawDescriptionHelpFormatter
@@ -62,6 +63,8 @@ dosplitlist = lambda x: [i.strip() for i in x.split()]
 doregexlist = lambda x: [re.compile(i) for i in x]
 doregexpatternlist = lambda x: [i.pattern for i in x]
 dojoinlist = lambda x: '\n    '.join(x)
+
+RE_RELPATH=re.compile(r'\.\.?\/.*')
 
 CONFIGPARSER = None
 CONFIG_DATATYPES = {
@@ -123,6 +126,23 @@ def getuuidsbelow(uuid, include=True):
         pns.extend(pn.children)
     return l
 
+def compactcommand(cmd, length=100, partlen=30):
+    s=[]
+    for c in cmd:
+        partlen = min(partlen, length)
+        size = len(c)
+        if size > partlen:
+            c = (c[:partlen]+'...') if c.startswith('-') else ('...' + c[-partlen:])
+            length -= partlen+4 
+        else:
+            length -= size+1
+        s.append(c)
+        if length<=0:
+            s.append('...')
+            return ' '.join(s)
+    return ' '.join(s)
+    
+    
 
 class ProgramNode(object):
     progtree = {}
@@ -137,6 +157,7 @@ class ProgramNode(object):
             self.parent = ProgramNode.progtree[parent]
         self.command = None
         self.command_path = None
+        self.scriptlang = None
         self.working_directory = None
         self.complete = False
         self.environment = {}
@@ -206,10 +227,10 @@ class ProgramNode(object):
         cmdcxt=[]
         while n.uuid != WISK_TRACKER_UUID:
             cmdcxt.append(command)
-            outdata = outdata + ('{!s} {!s} {!s} {!s:<.20} [{!r:<.100}]\n'.format(tab, n.command_type, n.uuid, os.path.basename(n.command_path), ' '.join(n.command)))
+            outdata = outdata + ('{!s} {!s} {!s} {!s:<.20} [{!r:<.100}]\n'.format(tab, n.command_type, n.uuid, os.path.basename(n.command_path), compactcommand(n.command)))
             tab=tab+'    '
             n = n.parent
-        print('\n%sUnrecognized Tool: %.150r\n[i]-InterpTool, [b] - Buildtool, [s] - ShellTool, [Enter] - hardtool, [e] - Save/Exit, [q] - Quit' % (outdata, self.command))
+        print('\n%sUnrecognized Tool: %r\n[i]-InterpTool, [b] - Buildtool, [s] - ShellTool, [Enter] - hardtool, [e] - Save/Exit, [q] - Quit' % (outdata, compactcommand(self.command)))
         while True:
             c = utils.getch()
             print('"[%d]"' % ord(c))
@@ -226,10 +247,12 @@ class ProgramNode(object):
                 sys.exit('Saving and Exiting...')
             elif c in ['q', 'Q']:
                 sys.exit('Terminating...')
+            elif c in ['g', 'G']:
+                pdb.set_trace()
             else:
                 continue
             break
-        print('%s for Tool: %.100r' % (self.command_type, self.command))
+        print('%s for Tool: %r' % (self.command_type, compactcommand(self.command)))
         CONFIG['command_type']['%s_patterns' % self.command_type].append(re.compile(re.escape(command)))
         return self.command_type
 
@@ -251,7 +274,7 @@ class ProgramNode(object):
             UNRECOGNIZED_TOOLS_CXT.append(cmdcxt)
             WISK_INSIGHT_FILE.write('UUID: %s : %s\n' % (self.uuid, insight_type))
             WISK_INSIGHT_FILE.write(outdata)
-            log.info('Unrecognized Program: %.50r', self.command)
+            log.info('Unrecognized Program: %r', compactcommand(self.command))
         self.command_type = 'hardtool'
         return self.command_type
 
@@ -270,23 +293,23 @@ class ProgramNode(object):
         if self.children:
             return False
         if self.parent.uuid == WISK_TRACKER_UUID:
-            log.debug('Top-Tool: Skip Merging %.50r', self.command)
+            log.debug('Top-Tool: Skip Merging %r', compactcommand(self.command))
             return False
         if self.command_type is None:
-            log.error('Not-Tool: Merging %.50r', self.command)
+            log.error('Not-Tool: Merging %.50r', compactcommand(self.command))
             self.generate_insight('Command Type None')
             return True
         if self.command_type in ['hardtool'] and self.parent.command_type in ['hardtool']:
-            log.debug('HardTool-by-HardTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+            log.debug('HardTool-by-HardTool:\n\t Merging %r\n\t child-of %r', compactcommand(self.command), compactcommand(self.parent.command))
             return True
         if self.command_type in ['hardtool'] and self.parent.command_type in ['shelltool']:
-            log.debug('ShellTool-by-HardTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+            log.debug('ShellTool-by-HardTool:\n\t Merging %r\n\t child-of %r', compactcommand(self.command), compactcommand(self.parent.command))
             return True
 #        if self.command_type in ['buildtool'] and self.parent.command_type in ['buildtool']:
-#            log.debug('BuildTool-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+#            log.debug('BuildTool-by-BuildTool:\n\t Merging %r\n\t child-of %r', compactcommand(self.command), compactcommand(self.parent.command))
 #            return True
 #        if self.command_type in ['buildtool'] and self.parent.command_type in ['shelltool']:
-#            log.debug('Shell-by-BuildTool:\n\t Merging %.50r\n\t child-of %.50r', self.command, self.parent.command)
+#            log.debug('Shell-by-BuildTool:\n\t Merging %r\n\t child-of %r', compactcommand(self.command), compactcommand(self.parent.command))
 #            return True
         return False
 
@@ -296,17 +319,30 @@ class ProgramNode(object):
         for p in interptool:
             m = p.match(command)
             if m and m.lastindex is not None:
-                log.info('InterpTool: %s -> %s' % (' '.join(self.command[:m.lastindex+1]), self.command[m.lastindex]))
+                log.info('InterpTool: %s, %s', p.pattern, m.groups())
+                log.info('            %r -> %r' % (compactcommand(self.command), compactcommand(self.command[m.lastindex:])))
+                scriptlang = []
                 for i in m.groups():
-                   if i: self.command.pop(0)
+                   if i:
+                       scriptlang.append(self.command.pop(0))
+                self.scriptlang = ' '.join(scriptlang)
                 break
-        self.command[0] = shutil.which(self.command[0], path=self.environment.get('PATH', '')) or self.command[0]
+        nenv = self.parent.environment or self.environment or os.environ
+        pth = ':'.join([nenv.get('PATH', ''), self.working_directory])
+        if RE_RELPATH.match(self.command[0]):
+             cmd = os.path.join(self.working_directory, self.command[0])
+        else:
+            cmd = shutil.which(self.command[0], path=pth) 
+        if cmd is None:
+            log.warn('Cannot find program: %s in %s', self.command[0], pth)
+        else:
+            self.command[0] = os.path.normpath(cmd)
         self.match_command_type()
          
 
     def domerge(self):
         assert self.uuid != WISK_TRACKER_UUID and self.parent.uuid != WISK_TRACKER_UUID
-        log.info('Merging: [%s] %.150r\n   with: [%s] %.150r', self.uuid, self.command, self.uuid, self.parent.command)
+        log.info('Merging: [%s] %r\n   with: [%s] %r', self.uuid, compactcommand(self.command), self.uuid, compactcommand(self.parent.command))
         for k,v in self.operations.items():
             self.parent.operations.setdefault(k, [])
             for i in v:
