@@ -70,43 +70,40 @@ os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR=111111111',
-         '11111X"', 
+    [0, ('"LARGEVAR='+('1'*3598)+'X"',
          'ENVIRONMENT *, "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3775+'X'
+os.environ["LARGEVAR"] = '1'*3598+'X'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR=111111111',
-         '111111X', 
+    [0, ('"LARGEVAR='+('1'*3598)+'X',
          'ENVIRONMENT *1", "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3775+'X'+'1'
+os.environ["LARGEVAR"] = '1'*3598+'X'+'1'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR=111111111',
-         '111111X', 
+    [0, ('"LARGEVAR='+('1'*3598)+'X',
          'ENVIRONMENT *11", "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3775+'X'+'11'
+os.environ["LARGEVAR"] = '1'*3598+'X'+'11'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR=111111111',
-         'ENVIRONMENT *111111111111111111',
+    [0, ('"LARGEVAR='+('1'*3599),
+         'ENVIRONMENT *'+'1'*4037,
          'ENVIRONMENT *1", "ZLASTVAR=END"',
          ),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*(3775 + 4039)
+os.environ["LARGEVAR"] = '1'*(3598 + 4039)
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
@@ -145,12 +142,12 @@ class TestExecEnv(unittest.TestCase):
 
     def test_exec(self):
         print(self.code)
-        args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
+        args = argparse.Namespace(command=[self.testscript], verbose=0, trackfile=None, test_id=self.id())
         wisktrack.create_reciever()
         runner = TrackedRunner(args)
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]
         print('Tracked Operations:\n\t%s' % ('\n\t'.join(lines)))
-        print('Expected Operations:\n\t%s' % ('\n\t'.join(self.tracks)))
+#         print('Expected Operations:\n\t%s' % ('\n\t'.join(self.tracks)))
         for i in self.tracks:
             print('Asserting: %s' % i)
             self.assertTrue([j for j in lines if i in j])

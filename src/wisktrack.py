@@ -51,6 +51,7 @@ WISK_TRACKER_PIPE=None
 WISK_TRACKER_UUID='XXXXXXXX-XXXXXXXX-XXXXXXXX'
 WISK_DEPDATA='wisk_depdata'
 WISK_PARSER_CFG='wisk_parser.cfg'
+WISK_DEBUGLOG='wisk_debug.log'
 WISK_INSIGHT_FILENAME='wisk_insight.data'
 WISK_INSIGHT_FILE=None
 WISK_ARGS=None
@@ -323,14 +324,14 @@ class ProgramNode(object):
                 log.info('            %r -> %r' % (compactcommand(self.command), compactcommand(self.command[m.lastindex:])))
                 scriptlang = []
                 for i in m.groups():
-                   if i:
-                       scriptlang.append(self.command.pop(0))
+                    if i:
+                        scriptlang.append(self.command.pop(0))
                 self.scriptlang = ' '.join(scriptlang)
                 break
         nenv = self.parent.environment or self.environment or os.environ
         pth = ':'.join([nenv.get('PATH', ''), self.working_directory])
         if RE_RELPATH.match(self.command[0]):
-             cmd = os.path.join(self.working_directory, self.command[0])
+            cmd = os.path.join(self.working_directory, self.command[0])
         else:
             cmd = shutil.which(self.command[0], path=pth) 
         if cmd is None:
@@ -603,18 +604,28 @@ def create_reciever():
 
 @utils.timethis
 def tracked_run(args):
+    global WISK_DEBUGLOG
     retval = None
     log.info('WISK Verbosity: %d', args.verbose-1)
     cmdenv = dict(os.environ)
     log.debug('LATEST_LIB_DIR: %s', env.LATEST_LIB_DIR)
+    WISK_DEBUGLOG = os.path.join(args.wsroot, WISK_DEBUGLOG)
+    open(WISK_DEBUGLOG, 'w').close()
     cmdenv.update({
         'LD_LIBRARY_PATH': ':'.join(['', os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib32'),
                                      os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib64')]),
 #        'LD_LIBRARY_PATH': ':'.join([os.path.join(os.path.dirname(env.INSTALL_LIB_DIR), 'lib32')]),
         'LD_PRELOAD': 'libwisktrack.so',
         'WISK_TRACKER_PIPE': WISK_TRACKER_PIPE,
+        'WISK_TRACKER_PIPE_FD': '-1',
         'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
+#         'WISK_TRACKER_DEBUGLOG_FD': '-1',
         'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose))})
+    if args.trace:
+        cmdenv['WISK_TRACKER_DEBUGLOG'] = WISK_DEBUGLOG
+        cmdenv['WISK_TRACKER_DEBUGLOG_FD'] = '-1'
+    else:
+        cmdenv['WISK_TRACKER_DEBUGLOG_FD'] = '2'
     if args.verbose > 4:
         cmdenv.update({'LD_DEBUG': 'all'})
     log.debug('Environment:\n%s', cmdenv)
@@ -782,6 +793,7 @@ Example:
         parser.add_argument('-V', '--version', action='version', version=program_version_message)
         parser.add_argument('-show', '--show', action='store_true', default=False, help="Show Depenency Data")
         parser.add_argument('-clean', '--clean', action='store_true', default=False, help="Show Cleaned Command Tree ")
+        parser.add_argument('-trace', '--trace', action='store_true', default=False, help="Trace to file")
         parser.add_argument('-wsroot', '--wsroot', type=str, default=os.getcwd(), help="Workspace Root")
         parser.add_argument('-trackfile', '--trackfile', type=str, default=os.path.join(os.getcwd(), WISK_DEPDATA), help="Where to output the tracking data")
         parser.add_argument('-config', '--config', type=str, default=WISK_PARSER_CFG, help="WISK Parser Configration")

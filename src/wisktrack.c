@@ -139,7 +139,10 @@ enum wisk_dbglvl_e {
 #define WISK_TRACKER_UUID "WISK_TRACKER_UUID"
 #define WISK_TRACKER_PUUID "WISK_TRACKER_PUUID"
 #define WISK_TRACKER_DEBUGLEVEL "WISK_TRACKER_DEBUGLEVEL"
+#define WISK_TRACKER_DEBUGLOG "WISK_TRACKER_DEBUGLOG"
+#define WISK_TRACKER_DEBUGLOG_FD "WISK_TRACKER_DEBUGLOG_FD"
 #define WISK_TRACKER_PIPE "WISK_TRACKER_PIPE"
+#define WISK_TRACKER_PIPE_FD "WISK_TRACKER_PIPE_FD"
 #define WISK_TRACKER_DISABLE_DEEPBIND "WISK_TRACKER_DISABLE_DEEPBIND"
 
 char *wisk_env_vars[] = {
@@ -149,7 +152,10 @@ char *wisk_env_vars[] = {
 	WISK_TRACKER_UUID,
 	WISK_TRACKER_PUUID,
 	WISK_TRACKER_DEBUGLEVEL,
+	WISK_TRACKER_DEBUGLOG,
+	WISK_TRACKER_DEBUGLOG_FD,
 	WISK_TRACKER_PIPE,
+	WISK_TRACKER_PIPE_FD,
 	WISK_TRACKER_DISABLE_DEEPBIND
 };
 
@@ -166,9 +172,10 @@ typedef struct random_uuid_ {
 
 static char *wisk_envp[WISK_ENV_VARCOUNT];
 // static char *wisk_env_uuid;
-static int wisk_env_count;
+static int wisk_env_count=0;
 static pid_t fs_tracker_pid = -1;
 static int fs_tracker_pipe = -1;
+static int fs_tracker_debuglog = -1;
 static char fs_tracker_uuid[UUID_SIZE+1];
 static char fs_tracker_puuid[UUID_SIZE+1];
 
@@ -201,6 +208,11 @@ static const char *getprogname(void)
 }
 #endif /* HAVE_GETPROGNAME */
 
+int fd_is_valid(int fd)
+{
+    return fcntl(fd, F_GETFD) != -1 || errno != EBADF;
+}
+
 static void wisk_log(enum wisk_dbglvl_e dbglvl, const char *func, const char *format, ...) PRINTF_ATTRIBUTE(3, 4);
 # define WISK_LOG(dbglvl, ...) wisk_log((dbglvl), __func__, __VA_ARGS__)
 
@@ -211,17 +223,22 @@ static void wisk_log(enum wisk_dbglvl_e dbglvl,
 	char buffer[1024];
 	va_list va;
 	const char *d;
+	int fdout=2;
 	unsigned int lvl = 0;
 	const char *prefix = "WISK";
 	const char *progname = getprogname();
 
-	d = getenv(WISK_TRACKER_DEBUGLEVEL);
-	if (d != NULL) {
-		lvl = atoi(d);
-	}
+	if (fs_tracker_debuglog != -1 && fs_tracker_debuglog != 2) {
+		fdout = fs_tracker_debuglog;
+	} else {
+		d = getenv(WISK_TRACKER_DEBUGLEVEL);
+		if (d != NULL) {
+			lvl = atoi(d);
+		}
 
-	if (lvl < dbglvl) {
-		return;
+		if (lvl < dbglvl) {
+			return;
+		}
 	}
 
 	va_start(va, format);
@@ -250,11 +267,11 @@ static void wisk_log(enum wisk_dbglvl_e dbglvl,
 		progname = "<unknown>";
 	}
 
-	fprintf(stderr,
-		"%s[%s (%u)] - %s: %s\n",
+	dprintf(fdout,
+		"%s[%s (%u:%d:%d:%d)] - %s: %s\n",
 		prefix,
 		progname,
-		(unsigned int)getpid(),
+		(unsigned int)getpid(), fdout, fs_tracker_debuglog, fs_tracker_pipe,
 		func,
 		buffer);
 }
@@ -827,9 +844,10 @@ static inline void escapedcharcopy(char **d, char **s)
 
 static inline void flushbuffer(char *msgbuffer, char **trackdest, int *trackcont)
 {
+	msgbuffer[BUFFER_SIZE-1] = '\0';
     *(*trackdest)++ = '\n';
     **trackdest='\0';
-    WISK_LOG(WISK_LOG_TRACE, msgbuffer);
+    WISK_LOG(WISK_LOG_TRACE, "%d: %.*s", *trackdest - msgbuffer, *trackdest - msgbuffer, msgbuffer);
 	write(fs_tracker_pipe, msgbuffer, *trackdest - msgbuffer);
     *trackdest = msgbuffer;
     *msgbuffer='\0';
@@ -1098,6 +1116,53 @@ static void wisk_env_add(char *var, int *count)
     }
 }
 
+static void wisk_env_update(char *var, char *value, int *count, bool update)
+{
+    char *s;
+    int len;
+	int i;
+
+	if (*count == 0) {
+		WISK_LOG(WISK_LOG_TRACE, "Initializing");
+		for(i=0; i< WISK_ENV_VARCOUNT; i++)
+			wisk_envp[i] = NULL;
+	}
+	for(i=0; i< *count; i++)
+		if (envcmp(var, wisk_env_vars[i]))
+			break;
+	if (value == NULL)
+		value = getenv(var);
+	if (value == NULL && strcmp(var, WISK_TRACKER_UUID) == 0)
+		value = fs_tracker_uuid;
+	if (value == NULL) {
+	    WISK_LOG(WISK_LOG_TRACE, "Nothing to %s WISK Environment %s = %s", update?"Update":"Add", var, value);
+		return;
+	}
+	if (i != *count && !update) {
+	    WISK_LOG(WISK_LOG_TRACE, "Do not %s existing WISK Environment %s = %s", update?"Update":"Add",var, value);
+		return;
+	}
+	len = strlen(var)+strlen(value) + 2;
+	if (wisk_envp[i] !=  NULL) {
+	    SAFE_FREE(wisk_envp[i]);
+	}
+	wisk_envp[i] = malloc(len);
+	wisk_envp[i][0] ='\0';
+	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s, len=%d", var, len);
+    snprintf(wisk_envp[i], len, "%s=%s", var, value);
+	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s", wisk_envp[i]);
+
+	if (i==*count) {
+		*count = i+1;
+		WISK_LOG(WISK_LOG_TRACE, "%s New WISK Environment %d: %s, count=%d", update?"Update":"Add",i, wisk_envp[i], *count);
+	} else {
+		WISK_LOG(WISK_LOG_TRACE, "%s Existing WISK Environment %d: %s", update?"Update":"Add", i, wisk_envp[i]);
+	}
+    for(i=0; i<wisk_env_count; i++) {
+	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
+    }
+}
+
 static int wisk_getvarcount(char *const envp[])
 {
     int envc, i;
@@ -1179,10 +1244,11 @@ static void wisk_loadenv(char *const envp[], char *nenvp[], char *ld_library_pat
     char *wisk_ld_path=NULL;
     char *wisk_ld_preload=NULL;
 
-//	WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
+	WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
     ld_library_path[0] = '\0';
     ld_preload[0] = '\0';
-	for(envi=0; envi < wisk_env_count; envi++)
+	for(envi=0; envi < wisk_env_count; envi++) {
+	  WISK_LOG(WISK_LOG_TRACE, "Adding WISK_ENV: %s", wisk_envp[envi]);
       if (envcmp(wisk_envp[envi], "LD_LIBRARY_PATH")) {
 		nenvp[envi] = ld_library_path;
         wisk_ld_path = wisk_envp[envi];
@@ -1194,7 +1260,10 @@ static void wisk_loadenv(char *const envp[], char *nenvp[], char *ld_library_pat
       }
       else
 		nenvp[envi] = wisk_envp[envi];
+      WISK_LOG(WISK_LOG_TRACE, "Added WISK_ENV: %s", nenvp[envi]);
+	}
     for (i=0; envp[i]; i++) {
+      WISK_LOG(WISK_LOG_TRACE, "Adding ENV: %s", envp[i]);
       if (envcmp(envp[i], "LD_LIBRARY_PATH")) {
           wisk_path_append(ld_library_path, envp[i], LD_LIBRARY_PATH_SEPARATOR);
           continue;
@@ -1206,6 +1275,7 @@ static void wisk_loadenv(char *const envp[], char *nenvp[], char *ld_library_pat
       else if (wisk_isenv(envp[i]))
           continue;
       nenvp[envi++] = envp[i];
+      WISK_LOG(WISK_LOG_TRACE, "Added ENV: %s", nenvp[envi-1]);
     }
     if (wisk_ld_path) 
         wisk_path_append(ld_library_path, wisk_ld_path, LD_LIBRARY_PATH_SEPARATOR);
@@ -1260,12 +1330,47 @@ done:
 	return ret;
 }
 
+void logging_init(void)
+{
+	char *d = NULL;
+	char value[PATH_MAX];
+
+	WISK_LOG(WISK_LOG_TRACE, "Init");
+	if (fs_tracker_debuglog == -1) {
+		d = getenv(WISK_TRACKER_DEBUGLOG_FD);
+		WISK_LOG(WISK_LOG_TRACE, "%s=%s", WISK_TRACKER_DEBUGLOG_FD, d);
+		if (d && fd_is_valid(atoi(d))) {
+			fs_tracker_debuglog = atoi(d);
+		}
+	}
+	if (fs_tracker_debuglog == -1) {
+		d = getenv(WISK_TRACKER_DEBUGLOG);
+		WISK_LOG(WISK_LOG_TRACE, "Init: %s=%s", WISK_TRACKER_DEBUGLOG, d);
+		if (d) {
+			if (wisk.libc.symbols._libc_open.f) {
+				WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", d, fs_tracker_uuid);
+				fs_tracker_debuglog = wisk.libc.symbols._libc_open.f(d, O_WRONLY|O_APPEND);
+			} else {
+				WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s", d, fs_tracker_uuid, fs_tracker_puuid);
+				fs_tracker_debuglog = libc_open(d, O_WRONLY|O_APPEND);
+			}
+			snprintf(value, PATH_MAX, "%d", fs_tracker_debuglog);
+			wisk_env_update(WISK_TRACKER_DEBUGLOG_FD, value, &wisk_env_count, true);
+		}
+	}
+	if (fs_tracker_debuglog == -1) {
+		WISK_LOG(WISK_LOG_ERROR, "File System Tracker Pipe %s cannot be opened for write\n", fs_tracker_debuglog);
+	}
+	WISK_LOG(WISK_LOG_TRACE, "Init done");
+}
+
 static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 {
-	char *uuidstr, *puuidstr;
+	char *uuidstr, *puuidstr, *d, value[PATH_MAX];
 	int ret, i;
 
 	wisk_mutex_lock(&fs_tracker_pipe_mutex);
+	logging_init();
     generate_uniqueid(fs_tracker_uuid);
 	uuidstr = getenv(WISK_TRACKER_UUID);
     if (uuidstr) {
@@ -1274,20 +1379,32 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
         strncpy(fs_tracker_puuid, "XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX", UUID_SIZE);
     }
 
-    if (wisk.libc.symbols._libc_open.f) {
-	    WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
-        fs_tracker_pipe = wisk.libc.symbols._libc_open.f(fs_tracker_pipe_path, O_WRONLY);
-    } else {
-	    WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s", fs_tracker_pipe_path, fs_tracker_uuid, fs_tracker_puuid);
-        fs_tracker_pipe = libc_open(fs_tracker_pipe_path, O_WRONLY);
-    }
-	if (fs_tracker_pipe < 0) {
+	if (fs_tracker_pipe == -1) {
+		d = getenv(WISK_TRACKER_PIPE_FD);
+		WISK_LOG(WISK_LOG_TRACE, "%s=%s", WISK_TRACKER_PIPE_FD, d);
+		if (d && fd_is_valid(atoi(d))) {
+			fs_tracker_pipe = atoi(d);
+		}
+	}
+	if (fs_tracker_pipe == -1) {
+		if (wisk.libc.symbols._libc_open.f) {
+			WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
+			fs_tracker_pipe = wisk.libc.symbols._libc_open.f(fs_tracker_pipe_path, O_WRONLY);
+		} else {
+			WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s", fs_tracker_pipe_path, fs_tracker_uuid, fs_tracker_puuid);
+			fs_tracker_pipe = libc_open(fs_tracker_pipe_path, O_WRONLY);
+		}
+		snprintf(value, PATH_MAX, "%d", fs_tracker_pipe);
+		wisk_env_update(WISK_TRACKER_PIPE_FD, value, &wisk_env_count, true);
+	}
+	if (fs_tracker_pipe == -1) {
 		WISK_LOG(WISK_LOG_ERROR, "File System Tracker Pipe %s cannot be opened for write\n", fs_tracker_pipe_path);
 	}
-	for(wisk_env_count=0, i=0; i< WISK_ENV_VARCOUNT; i++)
-        wisk_env_add(wisk_env_vars[i], &wisk_env_count);
+	for(i=0; i< WISK_ENV_VARCOUNT; i++)
+		wisk_env_update(wisk_env_vars[i], NULL, &wisk_env_count, false);
+//        wisk_env_add(wisk_env_vars[i], NULL, &wisk_env_count);
     for(i=0; i<wisk_env_count; i++) {
-	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%s]", wisk_envp[i]);
+	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
     }
     WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
     wisk_report_command();
@@ -1953,6 +2070,7 @@ void wisk_constructor(int argc, char** argv)
 
 	saved_argc = argc;
 	saved_argv = argv;
+//	logging_init();
 	WISK_LOG(WISK_LOG_TRACE, "Constructor(%d, %s)", argc, argv[0]);
 	/*
 	* If we hold a lock and the application forks, then the child

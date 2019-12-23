@@ -64,13 +64,13 @@ class TestOpen(unittest.TestCase):
 
     def test_open(self):
         print(self.code)
-        args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
+        args = argparse.Namespace(command=[self.testscript], verbose=0, trackfile=None, test_id=self.id())
         wisktrack.create_reciever()
         runner = TrackedRunner(args)
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]
         print('Tracked Operations:\n %s' % ('\n\t'.join(lines)))
-        print('Expected Operations:\n %s' % ('\n\t'.join(self.tracks)))
         for i in self.tracks:
+            print('Expected Operation: %s' % (i))
             self.assertIn(i, lines)
         wisktrack.delete_reciever(runner)
         # runner.waitforcompletion()

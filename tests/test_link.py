@@ -61,7 +61,7 @@ class TestLink(unittest.TestCase):
 
     def test_open(self):
         print(self.code)
-        args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
+        args = argparse.Namespace(command=[self.testscript], verbose=0, trackfile=None, test_id=self.id())
         wisktrack.create_reciever()
         runner = TrackedRunner(args)
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]

@@ -17,7 +17,7 @@ from testrunner import TrackedRunner
 
 
 log=logging.getLogger('tests.test_open')
-wisktrack.WISK_TRACKER_VERBOSITY=4
+wisktrack.WISK_TRACKER_VERBOSITY=0
 WSROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 LD_PRELOAD = 'libwisktrack.so'
 sys.path.insert(0, os.path.join(WSROOT, 'src/'))
@@ -35,7 +35,8 @@ if False:
     ld_preload.execvp(c_char_p(b'/bin/touch'), arrayofstr([b'/bin/touch', b'/tmp/file1', None]))
 
 
-TEMPLATE_EXESCRIPT='#!{PYTHON}\n'.format(PYTHON=sys.executable)
+TEMPLATE_EXESCRIPT='''#!{PYTHON}\n
+'''.format(PYTHON=sys.executable, testname="{testname}")
 
 TEMPLATE_COMMON = TEMPLATE_EXESCRIPT + '''
 import sys
@@ -58,7 +59,6 @@ testcases = [
 import os
 os.system('/bin/touch /tmp/{testname}/file1')
      '''],
-
     [0, tuple(),
      TEMPLATE_COMMON+'''
 sys.exit(ld_preload.execlpe(c_char_p(b'cat'), c_char_p(b'cat'), c_char_p(b'--help'), None, arrayofstr([None])))
@@ -190,16 +190,16 @@ class TestExec(unittest.TestCase):
 
     def test_exec(self):
         print(self.code)
-        args = argparse.Namespace(command=[self.testscript], verbose=4, trackfile=None)
+        args = argparse.Namespace(command=[self.testscript], verbose=0, trackfile=None, test_id=self.id())
         wisktrack.create_reciever()
         runner = TrackedRunner(args)
+        print('Hello')
         lines = [' '.join(i.split()[1:]).strip() for i in open(wisktrack.WISK_TRACKER_PIPE).readlines()]
         print('Tracked Operations:\n %s' % ('\n\t'.join(lines)))
         print('Expected Operations:\n %s' % ('\n\t'.join(self.tracks)))
         for i in self.tracks:
             self.assertIn(i, lines)
         wisktrack.delete_reciever(runner)
-        # runner.waitforcompletion()
         self.assertEqual(runner.retval.returncode, self.returncode)
 
 
