@@ -834,17 +834,20 @@ static inline void escapedcharcopy(char **d, char **s)
         if( **s==esc_char[j] ){
           *(*d)++ = '\\';
           *(*d)++ = essc_str[j];
+          *(*d) = '\0';
           (*s)++;
           break;
         }
     }
-    if(j == 9 )
+    if(j == 9 ) {
         *(*d)++ = *(*s)++;
+        *(*d) = '\0';
+    }
 }
 
 static inline void flushbuffer(char *msgbuffer, char **trackdest, int *trackcont)
 {
-	msgbuffer[BUFFER_SIZE-1] = '\0';
+//	msgbuffer[BUFFER_SIZE-1] = '\0';
     *(*trackdest)++ = '\n';
     **trackdest='\0';
     WISK_LOG(WISK_LOG_TRACE, "%d: %.*s", *trackdest - msgbuffer, *trackdest - msgbuffer, msgbuffer);
@@ -881,27 +884,33 @@ static void wisk_report_operation(char *msgbuffer, char const *uuid, char const 
     }
     if (*trackdest==msgbuffer) { // If beginning of Buffer
         *trackdest = msgbuffer+snprintf(*trackdest, BUFFER_SIZE, "%s %s ", uuid, operation);
-        if (*trackcont)
+        if (*trackcont) {
             *(*trackdest)++ = '*';
+            *(*trackdest) = '\0';
+        }
     }
 	if (idx > 0) {
         *(*trackdest)++ = ',';
         *(*trackdest)++ = ' ';
 	}
     *(*trackdest)++ = '"';
+    *(*trackdest) = '\0';
     for(src=valuestr; *src; ) {
         if (*trackdest >= msgbuffer+BUFFER_SIZE-10) { // Enough space to copy a char+'\0' OR escaped char + '\0'
             flushbuffer(msgbuffer, trackdest, trackcont);
         }
         if (*trackdest==msgbuffer) { // If beginning of Buffer
             *trackdest = msgbuffer+snprintf(*trackdest, BUFFER_SIZE, "%s %s ", uuid, operation);
-            if (*trackcont)
+            if (*trackcont) {
                 *(*trackdest)++ = '*';
+                *(*trackdest) = '\0';
+            }
             continue;
         }
         escapedcharcopy(trackdest, &src);
 	}
     *(*trackdest)++ = '"';
+    *(*trackdest) = '\0';
     if (idx < 0) // If idx < 0, its not a list, nothing more flush it
         flushbuffer(msgbuffer, trackdest, trackcont);
 }
