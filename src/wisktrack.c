@@ -166,6 +166,19 @@ typedef struct random_uuid_ {
     int i4;
 } random_uuid_t;
 
+char *ldload[] = {
+		"libwisktrack.so",
+		NULL
+};
+char *preldload[] = {
+		"libwisktrack.so",
+		NULL
+};
+char *postldload[] = {
+//		"libwisktrack.so",
+		NULL
+};
+
 #define VNAME(x) wisk_env_vars[x]
 
 #define WISK_ENV_VARCOUNT (sizeof((wisk_env_vars))/sizeof((wisk_env_vars)[0]))
@@ -359,12 +372,18 @@ struct wisk {
 
 static struct wisk wisk;
 
+/* LIBC fopen and open for internale use */
+__libc_fopen internal_fopen = NULL;
+__libc_open internal_open = NULL;
+
+
 /* prototypes */
 static char *fs_tracker_pipe_getpath(void);
 
 #define LIBC_NAME "libc.so"
 
 enum wisk_lib {
+    WISK_NONE,
     WISK_LIBC,
     WISK_LIBNSL,
     WISK_LIBSOCKET,
@@ -373,6 +392,8 @@ enum wisk_lib {
 static const char *wisk_str_lib(enum wisk_lib lib)
 {
 	switch (lib) {
+	case WISK_NONE:
+		return "rtld_next";
 	case WISK_LIBC:
 		return "libc";
 	case WISK_LIBNSL:
@@ -385,7 +406,7 @@ static const char *wisk_str_lib(enum wisk_lib lib)
 	return "unknown";
 }
 
-static void *wisk_load_lib_handle(enum wisk_lib lib)
+static void *wisk_load_lib_handle(enum wisk_lib lib, bool nocache)
 {
 	int flags = RTLD_LAZY;
 	void *handle = NULL;
@@ -417,7 +438,8 @@ static void *wisk_load_lib_handle(enum wisk_lib lib)
 	case WISK_LIBNSL:
 	case WISK_LIBSOCKET:
 #ifdef HAVE_LIBSOCKET
-		handle = wisk.libc.socket_handle;
+		if(!nocache)
+		    handle = wisk.libc.socket_handle;
 		if (handle == NULL) {
 			for (i = 10; i >= 0; i--) {
 				char soname[256] = {0};
@@ -429,17 +451,20 @@ static void *wisk_load_lib_handle(enum wisk_lib lib)
 				}
 			}
 
-			wisk.libc.socket_handle = handle;
+			if(!nocache)
+				wisk.libc.socket_handle = handle;
 		}
 		break;
 #endif
 	case WISK_LIBC:
-		handle = wisk.libc.handle;
+		if(!nocache)
+			handle = wisk.libc.handle;
 #ifdef LIBC_SO
 		if (handle == NULL) {
 			handle = dlopen(LIBC_SO, flags);
 
-			wisk.libc.handle = handle;
+			if(!nocache)
+				wisk.libc.handle = handle;
 		}
 #endif
 		if (handle == NULL) {
@@ -453,14 +478,18 @@ static void *wisk_load_lib_handle(enum wisk_lib lib)
 				}
 			}
 
-			wisk.libc.handle = handle;
+			if(!nocache)
+				wisk.libc.handle = handle;
 		}
 		break;
 	}
 
 	if (handle == NULL) {
 #ifdef RTLD_NEXT
-		handle = wisk.libc.handle = wisk.libc.socket_handle = RTLD_NEXT;
+
+		handle = wisk.libc.socket_handle = RTLD_NEXT;
+		if(!nocache)
+			wisk.libc.handle = handle;
 #else
 		WISK_LOG(WISK_LOG_ERROR,
 			  "Failed to dlopen library: %s\n",
@@ -472,12 +501,12 @@ static void *wisk_load_lib_handle(enum wisk_lib lib)
 	return handle;
 }
 
-static void *_wisk_bind_symbol(enum wisk_lib lib, const char *fn_name)
+static void *_wisk_bind_symbol(enum wisk_lib lib, const char *fn_name, bool nocache)
 {
 	void *handle;
 	void *func;
 
-	handle = wisk_load_lib_handle(lib);
+	handle = wisk_load_lib_handle(lib, nocache);
 
 	func = dlsym(handle, fn_name);
 	if (func == NULL) {
@@ -488,10 +517,10 @@ static void *_wisk_bind_symbol(enum wisk_lib lib, const char *fn_name)
 		exit(-1);
 	}
 
-//	WISK_LOG(WISK_LOG_TRACE,
-//		  "Loaded %s from %s",
-//		  fn_name,
-//		  wisk_str_lib(lib));
+	WISK_LOG(WISK_LOG_TRACE,
+		  "Loaded %s(%p) from %s",
+		  fn_name, func,
+		  wisk_str_lib(lib));
 
 	return func;
 }
@@ -529,7 +558,7 @@ static void wisk_mutex_unlock(pthread_mutex_t *mutex)
 		wisk_mutex_lock(&libc_symbol_binding_mutex); \
 		if (wisk.libc.symbols._libc_##sym_name.obj == NULL) { \
 			wisk.libc.symbols._libc_##sym_name.obj = \
-				_wisk_bind_symbol(WISK_LIBC, #sym_name); \
+				_wisk_bind_symbol(WISK_NONE, #sym_name, false); \
 		} \
 		wisk_mutex_unlock(&libc_symbol_binding_mutex); \
 	}
@@ -646,7 +675,7 @@ static FILE *libc_popen(const char *command, const char *type)
 
 static FILE *libc_fopen(const char *name, const char *mode)
 {
-//	WISK_LOG(WISK_LOG_TRACE, "static libc_fopen(%s, %s)", name, mode);
+	WISK_LOG(WISK_LOG_TRACE, "static libc_fopen(%s, %s)", name, mode);
 	wisk_bind_symbol_libc(fopen);
 
 	return wisk.libc.symbols._libc_fopen.f(name, mode);
@@ -780,6 +809,9 @@ static int libc_unlinkat(int dirfd, const char *pathname, int flags)
 /* DO NOT call this function during library initialization! */
 static void wisk_bind_symbol_all(void)
 {
+    internal_fopen = (__libc_fopen)_wisk_bind_symbol(WISK_LIBC, "fopen", true);
+    internal_open = (__libc_open)_wisk_bind_symbol(WISK_LIBC, "open", true);
+
 	wisk_bind_symbol_libc(fopen);
 #ifdef HAVE_FOPEN64
 	wisk_bind_symbol_libc(fopen64);
@@ -1085,7 +1117,8 @@ static int generate_uniqueid(char *str)
 //    i4 = random();
 //    snprintf(str, UUID_SIZE, "%08x-%08x-%08x-%08x", i1, i2, i3, i4);
 
-    randfile = fopen("/dev/urandom", "rb");
+    randfile = internal_fopen("/dev/urandom", "rb");
+    WISK_LOG(WISK_LOG_TRACE, "Randomize Device File: %p", randfile);
     fread(&random_uuid, sizeof(random_uuid), 1, randfile);
     fclose(randfile);
     snprintf(str, UUID_SIZE, "%08x-%08x-%08x-%08x", random_uuid.i1, random_uuid.i2, random_uuid.i3, random_uuid.i4);
@@ -1110,19 +1143,16 @@ static int wisk_isenv(const char *env)
 	return false;
 }
 
-static void wisk_env_add(char *var, int *count)
+static void debug_log_wiskenv(char *msg, char *const envp[])
 {
-    char *s;
-    int len;
-    s = getenv(var);
-    if (s) {
-        len = strlen(var)+strlen(s) + 2;
-        wisk_envp[*count] = malloc(len);
-        snprintf(wisk_envp[*count], len, "%s=%s", var, s);
-        if (envcmp(wisk_envp[*count], WISK_TRACKER_UUID))
-            strncpy(wisk_envp[*count]+strlen(WISK_TRACKER_UUID)+1, fs_tracker_uuid, UUID_SIZE);
-        (*count)++;
-    }
+	int i, count;
+	for(i=0, count=0; envp[i]; i++)
+	    count++;
+	WISK_LOG(WISK_LOG_TRACE, "%s Count: %d", msg?msg:"", count);
+	for(i=0; envp[i]; i++) {
+		WISK_LOG(WISK_LOG_TRACE, "\t%d: %s", i, envp[i]);
+	}
+
 }
 
 static void wisk_env_update(char *var, char *value, int *count, bool update)
@@ -1144,11 +1174,11 @@ static void wisk_env_update(char *var, char *value, int *count, bool update)
 	if (value == NULL && strcmp(var, WISK_TRACKER_UUID) == 0)
 		value = fs_tracker_uuid;
 	if (value == NULL) {
-	    WISK_LOG(WISK_LOG_TRACE, "Nothing to %s WISK Environment %s = %s", update?"Update":"Add", var, value);
+//	    WISK_LOG(WISK_LOG_TRACE, "Nothing to %s WISK Environment %s = %s", update?"Update":"Add", var, value);
 		return;
 	}
 	if (i != *count && !update) {
-	    WISK_LOG(WISK_LOG_TRACE, "Do not %s existing WISK Environment %s = %s", update?"Update":"Add",var, value);
+//	    WISK_LOG(WISK_LOG_TRACE, "Do not %s existing WISK Environment %s = %s", update?"Update":"Add",var, value);
 		return;
 	}
 	len = strlen(var)+strlen(value) + 2;
@@ -1157,19 +1187,19 @@ static void wisk_env_update(char *var, char *value, int *count, bool update)
 	}
 	wisk_envp[i] = malloc(len);
 	wisk_envp[i][0] ='\0';
-	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s, len=%d", var, len);
+//	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s, len=%d", var, len);
     snprintf(wisk_envp[i], len, "%s=%s", var, value);
-	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s", wisk_envp[i]);
+//	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s", wisk_envp[i]);
 
 	if (i==*count) {
 		*count = i+1;
-		WISK_LOG(WISK_LOG_TRACE, "%s New WISK Environment %d: %s, count=%d", update?"Update":"Add",i, wisk_envp[i], *count);
+//		WISK_LOG(WISK_LOG_TRACE, "%s New WISK Environment %d: %s, count=%d", update?"Update":"Add",i, wisk_envp[i], *count);
 	} else {
-		WISK_LOG(WISK_LOG_TRACE, "%s Existing WISK Environment %d: %s", update?"Update":"Add", i, wisk_envp[i]);
+//		WISK_LOG(WISK_LOG_TRACE, "%s Existing WISK Environment %d: %s", update?"Update":"Add", i, wisk_envp[i]);
 	}
-    for(i=0; i<wisk_env_count; i++) {
-	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
-    }
+//    for(i=0; i<wisk_env_count; i++) {
+//	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
+//    }
 }
 
 static int wisk_getvarcount(char *const envp[])
@@ -1188,16 +1218,16 @@ static int wisk_getvarcount(char *const envp[])
     return envc;
 }
 
-static void wisk_path_append(char *dest, char *src, char separator)
+static void wisk_path_append(char *dest, char *src, char separator, char **include, char **exclude)
 {
-    char *starts, *s, *d, *envdest=dest, *envsrc=src;
+    char *starts, *s, *d, **inc, **exc, *envdest=dest, *envsrc=src, *pinclude=NULL, *pexclude=NULL;
     char sepstr[2];
-    int len, first=0;
+    int len, first=0, inexlen;
     
     sprintf(sepstr, "%c", separator);
-//	WISK_LOG(WISK_LOG_TRACE, "sepstr '%s'", sepstr);
-//	WISK_LOG(WISK_LOG_TRACE, "Dest '%s'", dest);
-//	WISK_LOG(WISK_LOG_TRACE, "Src '%s'", src);
+	WISK_LOG(WISK_LOG_TRACE, "dest:%s, src:%s, include=%s%s%s, exclude=%s%s%s", dest, src,
+			include?"{":"", include?include[0]:NULL, include?",..}":"",
+			exclude?"{":"", exclude?exclude[0]:NULL, exclude?",..}":"");
     for(starts=envsrc, len=0; *envsrc && *envsrc != '='; envsrc++, len++);
     envsrc++;
     if (*envdest  == '\0') {
@@ -1205,21 +1235,15 @@ static void wisk_path_append(char *dest, char *src, char separator)
     }
     for(; *envdest && *envdest != '='; envdest++);
     envdest++;
-//	WISK_LOG(WISK_LOG_TRACE, "*EnvDest '%c'", *envdest);
     if (*envdest == '\0')
         first=1;
-//	WISK_LOG(WISK_LOG_TRACE, "First %d", first);
-//	WISK_LOG(WISK_LOG_TRACE, "EnvDest '%s'", envdest);
-//	WISK_LOG(WISK_LOG_TRACE, "EnvSrc '%s'", envsrc);
     for(starts=envsrc, s=envsrc, len=0; ; s++) {
-//	    WISK_LOG(WISK_LOG_TRACE, "Checking: %.*s", len, starts);
         if (*starts == '\0')
             break;
         if (*starts == separator) {
             starts++;
             s=starts;
             len=1;
-//	        WISK_LOG(WISK_LOG_TRACE, "Skipping '%c' %s", separator, starts);
             continue;
         }
         if (*s != separator && *s) {
@@ -1232,17 +1256,42 @@ static void wisk_path_append(char *dest, char *src, char separator)
                 break;
             }
         }
+        if (len && include) {
+        	pinclude = include[0];
+//        	WISK_LOG(WISK_LOG_TRACE, "including: %s....", include[0]);
+        	for(inc=include; *inc; inc += 1) {
+            	inexlen=strlen(*inc);
+            	if (strncmp(starts, *inc, (len <= inexlen?len:inexlen))==0) {
+            		break;
+        	    }
+        	}
+        	if(!*inc) {
+//	            WISK_LOG(WISK_LOG_TRACE, "Skipping by Include-Only: %.*s", len, starts);
+        		len=0;
+        	}
+        }
+        if (len && exclude) {
+        	pexclude = exclude[0];
+//        	WISK_LOG(WISK_LOG_TRACE, "excluding: %s....", exclude[0]);
+        	for(exc=exclude; *exc; exc += 1) {
+				inexlen=strlen(*exc);
+//				WISK_LOG(WISK_LOG_TRACE, "Exclude Comparing: %.*s, %s, %d, %d, %d", len, starts, *exc, len, inexlen, (len <= inexlen?len:inexlen));
+				if (strncmp(starts, *exc, (len <= inexlen?len:inexlen))==0) {
+//		            WISK_LOG(WISK_LOG_TRACE, "Skipping by Exclude-Only: %.*s", len, starts);
+					len=0;
+					break;
+				}
+        	}
+        }
         if (len) {
+            WISK_LOG(WISK_LOG_TRACE, "Adding: %.*s, include=%s, exclude=%s", len, starts, pinclude, pexclude);
             if (!first)
                strncat(envdest, sepstr, 1);
             first=0;
             strncat(envdest, starts, len);
-//	        WISK_LOG(WISK_LOG_TRACE, "Appending: %.*s", len, starts);
-//	        WISK_LOG(WISK_LOG_TRACE, "Creates: %s", envdest);
         }
         starts=s;
         len=1;
-//	    WISK_LOG(WISK_LOG_TRACE, "Remaining: %s", starts);
     }
 	WISK_LOG(WISK_LOG_TRACE, "Return %s", dest);
 }
@@ -1253,47 +1302,52 @@ static void wisk_loadenv(char *const envp[], char *nenvp[], char *ld_library_pat
     char *wisk_ld_path=NULL;
     char *wisk_ld_preload=NULL;
 
-	WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
+//	WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
     ld_library_path[0] = '\0';
     ld_preload[0] = '\0';
 	for(envi=0; envi < wisk_env_count; envi++) {
-	  WISK_LOG(WISK_LOG_TRACE, "Adding WISK_ENV: %s", wisk_envp[envi]);
+//	  WISK_LOG(WISK_LOG_TRACE, "Adding WISK_ENV: %s", wisk_envp[envi]);
       if (envcmp(wisk_envp[envi], "LD_LIBRARY_PATH")) {
 		nenvp[envi] = ld_library_path;
         wisk_ld_path = wisk_envp[envi];
       }
       else if (envcmp(wisk_envp[envi], "LD_PRELOAD")) {
+//      	WISK_LOG(WISK_LOG_TRACE, "Saved WISK ENV LDLOAD: %s", wisk_envp[envi]);
 		nenvp[envi] = ld_preload;
         wisk_ld_preload = wisk_envp[envi];
-        wisk_path_append(ld_preload, wisk_ld_preload, LD_PRELOAD_SEPARATOR);
+        wisk_path_append(ld_preload, wisk_ld_preload, LD_PRELOAD_SEPARATOR, preldload, NULL);
       }
       else
 		nenvp[envi] = wisk_envp[envi];
-      WISK_LOG(WISK_LOG_TRACE, "Added WISK_ENV: %s", nenvp[envi]);
+//      WISK_LOG(WISK_LOG_TRACE, "Added WISK_ENV: %s", nenvp[envi]);
 	}
+//	WISK_LOG(WISK_LOG_TRACE, "Added by PRE LDLOAD: %s", ld_preload);
     for (i=0; envp[i]; i++) {
-      WISK_LOG(WISK_LOG_TRACE, "Adding ENV: %s", envp[i]);
+//      WISK_LOG(WISK_LOG_TRACE, "Adding ENV: %s", envp[i]);
       if (envcmp(envp[i], "LD_LIBRARY_PATH")) {
-          wisk_path_append(ld_library_path, envp[i], LD_LIBRARY_PATH_SEPARATOR);
+    	  nenvp[envi] = ld_library_path;
+          wisk_path_append(ld_library_path, envp[i], LD_LIBRARY_PATH_SEPARATOR, NULL, NULL);
           continue;
       } 
       else if (envcmp(envp[i], "LD_PRELOAD")) {
-          wisk_path_append(ld_preload, envp[i], LD_PRELOAD_SEPARATOR);
+//    	  WISK_LOG(WISK_LOG_TRACE, "Current Original ENV LDLOAD: %s", envp[i]);
+    	  nenvp[envi] = ld_preload;
+          wisk_path_append(ld_preload, envp[i], LD_PRELOAD_SEPARATOR, NULL, ldload);
           continue;
       } 
       else if (wisk_isenv(envp[i]))
           continue;
       nenvp[envi++] = envp[i];
-      WISK_LOG(WISK_LOG_TRACE, "Added ENV: %s", nenvp[envi-1]);
+//      WISK_LOG(WISK_LOG_TRACE, "Added ENV: %s", nenvp[envi-1]);
     }
+//    WISK_LOG(WISK_LOG_TRACE, "Added from Original LDLOAD: %s", ld_preload);
     if (wisk_ld_path) 
-        wisk_path_append(ld_library_path, wisk_ld_path, LD_LIBRARY_PATH_SEPARATOR);
-//    if (wisk_ld_preload) 
-//        wisk_path_append(ld_preload, wisk_ld_preload, LD_PRELOAD_SEPARATOR);
+        wisk_path_append(ld_library_path, wisk_ld_path, LD_LIBRARY_PATH_SEPARATOR, NULL, NULL);
+    if (wisk_ld_preload)
+        wisk_path_append(ld_preload, wisk_ld_preload, LD_PRELOAD_SEPARATOR, postldload, NULL);
     nenvp[envi++] = envp[i];
-//	for(i=0; nenvp[i]; i++) {
-//		WISK_LOG(WISK_LOG_TRACE, "Environment %d: %s", i, nenvp[i]);
-//	}
+//	WISK_LOG(WISK_LOG_TRACE, "Added by POST LDLOAD: %s", ld_preload);
+	debug_log_wiskenv("WISK Loaded Environment", nenvp);
 }
 
 
@@ -1356,11 +1410,12 @@ void logging_init(void)
 		d = getenv(WISK_TRACKER_DEBUGLOG);
 		WISK_LOG(WISK_LOG_TRACE, "Init: %s=%s", WISK_TRACKER_DEBUGLOG, d);
 		if (d) {
-			if (wisk.libc.symbols._libc_open.f) {
+			if (internal_open) {
 				WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", d, fs_tracker_uuid);
-				fs_tracker_debuglog = wisk.libc.symbols._libc_open.f(d, O_WRONLY|O_APPEND);
+				fs_tracker_debuglog = internal_open(d, O_WRONLY|O_APPEND);
 			} else {
-				WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s", d, fs_tracker_uuid, fs_tracker_puuid);
+				WISK_LOG(WISK_LOG_ERROR, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s(Internal open not initialized)",
+						d, fs_tracker_uuid, fs_tracker_puuid);
 				fs_tracker_debuglog = libc_open(d, O_WRONLY|O_APPEND);
 			}
 			snprintf(value, PATH_MAX, "%d", fs_tracker_debuglog);
@@ -1379,6 +1434,7 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	int ret, i;
 
 	wisk_mutex_lock(&fs_tracker_pipe_mutex);
+	wisk_bind_symbol_all();
 	logging_init();
     generate_uniqueid(fs_tracker_uuid);
 	uuidstr = getenv(WISK_TRACKER_UUID);
@@ -1396,12 +1452,12 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 		}
 	}
 	if (fs_tracker_pipe == -1) {
-		if (wisk.libc.symbols._libc_open.f) {
+		if (internal_open) {
 			WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
-			fs_tracker_pipe = wisk.libc.symbols._libc_open.f(fs_tracker_pipe_path, O_WRONLY);
+			fs_tracker_pipe = internal_open(fs_tracker_pipe_path, O_WRONLY);
 		} else {
-			WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s", fs_tracker_pipe_path, fs_tracker_uuid, fs_tracker_puuid);
-			fs_tracker_pipe = libc_open(fs_tracker_pipe_path, O_WRONLY);
+			WISK_LOG(WISK_LOG_ERROR, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s(Internal open not initialized)",
+					fs_tracker_pipe_path, fs_tracker_uuid, fs_tracker_puuid);
 		}
 		snprintf(value, PATH_MAX, "%d", fs_tracker_pipe);
 		wisk_env_update(WISK_TRACKER_PIPE_FD, value, &wisk_env_count, true);
@@ -1411,11 +1467,11 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	}
 	for(i=0; i< WISK_ENV_VARCOUNT; i++)
 		wisk_env_update(wisk_env_vars[i], NULL, &wisk_env_count, false);
-//        wisk_env_add(wisk_env_vars[i], NULL, &wisk_env_count);
-    for(i=0; i<wisk_env_count; i++) {
-	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
-    }
-    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
+//    for(i=0; i<wisk_env_count; i++) {
+//	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
+//    }
+//    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV_COUNT: %d", wisk_env_count);
+    debug_log_wiskenv("WISK Environment", wisk_envp);
     wisk_report_command();
 
 done:
@@ -1468,6 +1524,7 @@ static FILE *wisk_fopen(const char *name, const char *mode)
     } else {
         wisk_report_unknown(name, mode);
     }
+    WISK_LOG(WISK_LOG_TRACE, "wisk_fopen(%s, %s)->%p", name, mode, fp);
 	return fp;
 }
 
@@ -2111,10 +2168,10 @@ void wisk_destructor(void)
 {
 	if (fs_tracker_enabled())
     	wisk_report_commandcomplete();
-	if (wisk.libc.handle != NULL) {
+	if (wisk.libc.handle != NULL && wisk.libc.handle != RTLD_NEXT) {
 		dlclose(wisk.libc.handle);
 	}
-	if (wisk.libc.socket_handle) {
+	if (wisk.libc.socket_handle && wisk.libc.socket_handle != RTLD_NEXT) {
 		dlclose(wisk.libc.socket_handle);
 	}
 	WISK_LOG(WISK_LOG_TRACE, "Destructor ");
