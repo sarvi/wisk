@@ -607,7 +607,7 @@ def tracked_run(args):
     global WISK_DEBUGLOG
     retval = None
     log.info('WISK Verbosity: %d', args.verbose-1)
-    cmdenv = dict(os.environ)
+    cmdenv = {k:v for k,v in os.environ.items() if k in args.environ}
     log.debug('LATEST_LIB_DIR: %s', env.LATEST_LIB_DIR)
     WISK_DEBUGLOG = os.path.join(args.wsroot, WISK_DEBUGLOG)
     open(WISK_DEBUGLOG, 'w').close()
@@ -798,6 +798,9 @@ Example:
         parser.add_argument('-trackfile', '--trackfile', type=str, default=os.path.join(os.getcwd(), WISK_DEPDATA), help="Where to output the tracking data")
         parser.add_argument('-config', '--config', type=str, default=WISK_PARSER_CFG, help="WISK Parser Configration")
         parser.add_argument('-extract', '--extract', type=str, default=[], help="Extract specific nodes Parser Configration")
+        parser.add_argument('-environ', '--environ', type=str, action='append',
+                            default=['PATH', 'LOGNAME', 'LANGUAGE', 'HOME', 'USER', 'SHELL'],
+                            help='Environment variables for carry forward')
 
         args = partialparse(parser)
 
