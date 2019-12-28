@@ -1169,10 +1169,10 @@ static void wisk_env_update(char *var, char *value, int *count, bool update)
 	for(i=0; i< *count; i++)
 		if (envcmp(var, wisk_env_vars[i]))
 			break;
+	if (strncmp(var, WISK_TRACKER_UUID, strlen(WISK_TRACKER_UUID)) == 0)
+		value = fs_tracker_uuid;
 	if (value == NULL)
 		value = getenv(var);
-	if (value == NULL && strcmp(var, WISK_TRACKER_UUID) == 0)
-		value = fs_tracker_uuid;
 	if (value == NULL) {
 //	    WISK_LOG(WISK_LOG_TRACE, "Nothing to %s WISK Environment %s = %s", update?"Update":"Add", var, value);
 		return;
@@ -1187,7 +1187,7 @@ static void wisk_env_update(char *var, char *value, int *count, bool update)
 	}
 	wisk_envp[i] = malloc(len);
 	wisk_envp[i][0] ='\0';
-//	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s, len=%d", var, len);
+	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s=%s, len=%d", var, value, len);
     snprintf(wisk_envp[i], len, "%s=%s", var, value);
 //	WISK_LOG(WISK_LOG_TRACE, "WISK Environment %s", wisk_envp[i]);
 
@@ -1467,6 +1467,7 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	}
 	for(i=0; i< WISK_ENV_VARCOUNT; i++)
 		wisk_env_update(wisk_env_vars[i], NULL, &wisk_env_count, false);
+
 //    for(i=0; i<wisk_env_count; i++) {
 //	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
 //    }
