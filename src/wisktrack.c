@@ -1052,9 +1052,16 @@ static void  wisk_report_command()
     if (fs_tracker_pipe < 0)
     	return;
     i = readlink("/proc/self/exe", curprog, sizeof(curprog)-1);
-    if (i != -1) {
-      curprog[i] = '\0';
+    if (i == PATH_MAX) {
+      curprog[PATH_MAX-1] = '\0';
+    } else if (i == -1) {
+    	WISK_LOG(WISK_LOG_ERROR, "Falling back to ArgV, %d: %s", errno, strerror(errno));
+    	strncpy(curprog, saved_argv[0], PATH_MAX);
+    } else {
+    	curprog[i] = '\0';
     }
+    WISK_LOG(WISK_LOG_TRACE, "%d: %s", i, curprog);
+
 	getcwd(curpath, PATH_MAX);
     WISK_LOG(WISK_LOG_TRACE, "%s CALLS %s PID=%d PPID=%d)",fs_tracker_puuid, fs_tracker_uuid, getpid(), getppid());
     wisk_report_operation(msgbuffer, fs_tracker_puuid, "CALLS", fs_tracker_uuid, -1, NULL, NULL);
@@ -1071,21 +1078,31 @@ static void  wisk_report_command()
 static void  wisk_report_commandcomplete()
 {
     int count;
-    char pbuf[PATH_MAX], ppbuf[PATH_MAX];
+    char pbuf[PATH_MAX], ppbuf[PATH_MAX], procpbuf[PATH_MAX];
     char msgbuffer[BUFFER_SIZE];
 
     if (fs_tracker_pipe < 0)
     	return;
     for(count=0; saved_argv[count]; count++); 
-    char *listp[count+3];
+    char *listp[count+4];
+    snprintf(procpbuf, PATH_MAX, "%d", fs_tracker_pid);
     snprintf(pbuf, PATH_MAX, "%d", getpid());
     snprintf(ppbuf, PATH_MAX, "%d", getppid());
-    listp[0] = ppbuf;
+    listp[0] = procpbuf;
     listp[1] = pbuf;
-    for(count=2; saved_argv[count-2]; count++)
-        listp[count] = saved_argv[count-2]; 
-    listp[count] = saved_argv[count-2]; 
-    wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMPLETE", listp);
+    listp[2] = ppbuf;
+    for(count=3; saved_argv[count-3]; count++)
+        listp[count] = saved_argv[count-3];
+    listp[count] = saved_argv[count-3];
+    if(getpid() == fs_tracker_pid || getppid() == 1) {
+        wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMPLETE", listp);
+    }
+    else {
+    	WISK_LOG(WISK_LOG_TRACE, "%s COMPLETE_THREAD [\"%d\" \"%d\" \"%d\" \"%s\" \"%s\" \"%s\" \"%s\" %s]",
+    			fs_tracker_uuid, fs_tracker_pid, getpid(), getppid(), listp[3], count>4?listp[4]:"", count>5?listp[5]:"", count>6?listp[6]:"", count>7?"...":"");
+//        wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "COMPLETE_THREAD", listp);
+
+    }
 }
 
 
@@ -1416,7 +1433,7 @@ void logging_init(void)
 			} else {
 				WISK_LOG(WISK_LOG_ERROR, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s(Internal open not initialized)",
 						d, fs_tracker_uuid, fs_tracker_puuid);
-				fs_tracker_debuglog = libc_open(d, O_WRONLY|O_APPEND);
+//				fs_tracker_debuglog = libc_open(d, O_WRONLY|O_APPEND);
 			}
 			snprintf(value, PATH_MAX, "%d", fs_tracker_debuglog);
 			wisk_env_update(WISK_TRACKER_DEBUGLOG_FD, value, &wisk_env_count, true);
@@ -1454,7 +1471,7 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	if (fs_tracker_pipe == -1) {
 		if (internal_open) {
 			WISK_LOG(WISK_LOG_TRACE, "Tracker Recieve Pipe Real open(%s), UUID=%s", fs_tracker_pipe_path, fs_tracker_uuid);
-			fs_tracker_pipe = internal_open(fs_tracker_pipe_path, O_WRONLY);
+			fs_tracker_pipe = internal_open(fs_tracker_pipe_path, O_WRONLY|O_APPEND);
 		} else {
 			WISK_LOG(WISK_LOG_ERROR, "Tracker Recieve Pipe: Local open(%s), UUID=%s, PUUID=%s(Internal open not initialized)",
 					fs_tracker_pipe_path, fs_tracker_uuid, fs_tracker_puuid);
@@ -1467,6 +1484,7 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	}
 	for(i=0; i< WISK_ENV_VARCOUNT; i++)
 		wisk_env_update(wisk_env_vars[i], NULL, &wisk_env_count, false);
+	fs_tracker_pid = getpid();
 
 //    for(i=0; i<wisk_env_count; i++) {
 //	    WISK_LOG(WISK_LOG_TRACE, "WISK_ENV[%d: %s]", i, wisk_envp[i]);
