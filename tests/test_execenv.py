@@ -70,40 +70,40 @@ os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR='+('1'*3598)+'X"',
+    [0, ('"LARGEVAR='+('1'*3589)+'X"',
          'ENVIRONMENT *, "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3598+'X'
+os.environ["LARGEVAR"] = '1'*3589+'X'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR='+('1'*3598)+'X',
+    [0, ('"LARGEVAR='+('1'*3589)+'X',
          'ENVIRONMENT *1", "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3598+'X'+'1'
+os.environ["LARGEVAR"] = '1'*3589+'X'+'1'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR='+('1'*3598)+'X',
+    [0, ('"LARGEVAR='+('1'*3589)+'X',
          'ENVIRONMENT *11", "ZLASTVAR=END"'),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*3598+'X'+'11'
+os.environ["LARGEVAR"] = '1'*3589+'X'+'11'
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
      '''],
-    [0, ('"LARGEVAR='+('1'*3599),
+    [0, ('"LARGEVAR='+('1'*3589),
          'ENVIRONMENT *'+'1'*4037,
          'ENVIRONMENT *1", "ZLASTVAR=END"',
          ),
      TEMPLATE_COMMON+'''
 os.environ.clear()
-os.environ["LARGEVAR"] = '1'*(3598 + 4039)
+os.environ["LARGEVAR"] = '1'*(3589 + 4039)
 os.environ["ZLASTVAR"] = "END"
 
 sys.exit(ld_preload.execv(c_char_p(b'/bin/cat'), arrayofstr([b'/bin/cat', b'--help', None])))
