@@ -308,10 +308,10 @@ log_virtenv_state() {
         log_path="/auto/wit-log/logs/$install_type/deploy/pip_freeze_$(basename "$workspace_dir")"
     fi
 
-    if [[ -x "$virtenvpath/bin/pip" ]]
+    if [[ -x "$virtenvpath/bin/pip3" ]]
     then
         rotate_files "$log_path" "txt" "last"
 
-        "$virtenvpath/bin/pip" freeze > "${log_path}.txt"
+        "$virtenvpath/bin/pip3" freeze > "${log_path}.txt"
     fi
 }

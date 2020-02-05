@@ -105,30 +105,30 @@ log_virtenv_state "$VIRTENVPATH" "$INSTALL_TYPE" "$WORKSPACE_DIR" || true
 
 rm -f "$WORKSPACE_DIR/pip.log"
 # Make sure pip is up to date.  Prevents sporadic certificate errors
-if ! "$VIRTENVPATH/bin/pip" install --upgrade --log "$WORKSPACE_DIR/pip.log" pip; then
+if ! "$VIRTENVPATH/bin/pip3" install --upgrade --log "$WORKSPACE_DIR/pip.log" pip; then
     echo "Failed to upgrade pip - re-initializing virtualenv"
     "$VIRTUALENV" --clear -p "$PYTHON" "$VIRTENVPATH"
     # Attempt upgrade a second time
-    "$VIRTENVPATH/bin/pip" install --upgrade --log "$WORKSPACE_DIR/pip.log" pip
+    "$VIRTENVPATH/bin/pip3" install --upgrade --log "$WORKSPACE_DIR/pip.log" pip
 fi
 
 echo "Updating virtualenv at $VIRTENVPATH"
 if [[ -f "$WORKSPACE_DIR/requirements.setup.txt" ]]
 then
-    "$VIRTENVPATH/bin/pip" install --upgrade --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.setup.txt"
+    "$VIRTENVPATH/bin/pip3" install --upgrade --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.setup.txt"
 fi
 
 if [[ "$SCRIPT_NAME" == cli_pyenv_setup.sh && "$(basename "$VIRTENVPATH")" = *CLIENT* ]]
 then
-    "$VIRTENVPATH/bin/pip" install --upgrade --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.cli.txt"
+    "$VIRTENVPATH/bin/pip3" install --upgrade --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.cli.txt"
     echo "Virtualenv to deploy for CLI configured successfully !!!"
     exit
 fi
 
-"$VIRTENVPATH/bin/pip" install --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.orig.txt"
+"$VIRTENVPATH/bin/pip3" install --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.orig.txt"
 if [[ "$SCRIPT_NAME" == devpyenv_setup.sh && -r "$WORKSPACE_DIR/requirements.${OSTYPE}.txt" ]]
 then
-    "$VIRTENVPATH/bin/pip" install --upgrade --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.${OSTYPE}.txt"
+    "$VIRTENVPATH/bin/pip3" install --upgrade --log "$WORKSPACE_DIR/pip.log" -r "$WORKSPACE_DIR/requirements.${OSTYPE}.txt"
 fi
 
 log_virtenv_state "$VIRTENVPATH" "$INSTALL_TYPE" "$WORKSPACE_DIR" || true

@@ -308,7 +308,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('Design', 'wit', u'WISK Design Documentation', [author], 4),
+    ('Design', 'wisk', u'WISK Design Documentation', [author], 4),
 ]
 
 # If true, show URL addresses after external links.
