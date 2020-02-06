@@ -17,9 +17,9 @@ wisktrack -- A program to wisktrack
 from __future__ import print_function
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../python3/current/lib'))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../lib/python/'))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../lib/python3.5/site-packages'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../lib/python{0.major}.{0.minor}/'.format(sys.version_info)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), '../lib/python{0.major}.{0.minor}/site-packages'.format(sys.version_info)))
+
 try:
     from common.env import exit_clean
     import wisktrack
