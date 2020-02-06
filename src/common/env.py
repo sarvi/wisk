@@ -254,6 +254,8 @@ def config_read(cfg_search, doclientcfg=False):  # pylint: disable=locally-disab
 
     if not ENVIRONMENT['installed']:
         config.set('common', 'logdir', '%(install_root)s/logs/%(toolrootname)s')
+    else:
+        config.set('common', 'logdir', '/auto/wit-log/wisklogs/%(toolrootname)s')
     # Read system defaults
     cfgfiles = list(cfg_search)
     found = []
