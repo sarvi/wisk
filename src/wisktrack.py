@@ -55,6 +55,7 @@ WISK_DEBUGLOG='wisk_debug.log'
 WISK_INSIGHT_FILENAME='wisk_insight.data'
 WISK_INSIGHT_FILE=None
 WISK_ARGS=None
+WISK_EVENTFILTERS=['writes', 'reads', 'links', 'chmods','process']
 UNRECOGNIZED_TOOLS_CXT = []
 FIELDS_ALL = ['UUID', 'P-UUID', 'PID', 'PPID', 'WORKING_DIRECTORY', 'OPERATIONS', 'COMMAND', 'COMMAND_PATH', 
               'ENVIRONMENT', 'COMPLETE', 'command_type', 'children', 'WSROOT', 'invokes', 'mergedcommands']
@@ -602,6 +603,20 @@ def create_reciever():
     log.info('Creating Recieving FIFO Pipe: %s', WISK_TRACKER_PIPE)
     os.mkfifo(WISK_TRACKER_PIPE)
 
+def getfiltermask(args):
+    if not args.filter:
+        return 0xFFFFFFFF
+    print(args.filter)
+    mask = 0x0
+    for k in args.filter.split(','):
+        try:
+            i = WISK_EVENTFILTERS.index(k)
+            mask = mask | (1 << i)
+        except ValueError:
+            log.error("Unrecognized event filter value: %s. Supported values are %s", k, ', '.join(WISK_EVENTFILTERS))
+            exit(1)
+    return mask
+
 @utils.timethis
 def tracked_run(args):
     global WISK_DEBUGLOG
@@ -620,7 +635,9 @@ def tracked_run(args):
         'WISK_TRACKER_PIPE_FD': '-1',
         'WISK_TRACKER_UUID': WISK_TRACKER_UUID,
 #         'WISK_TRACKER_DEBUGLOG_FD': '-1',
-        'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose))})
+        'WISK_TRACKER_DEBUGLEVEL': ('%d' % (args.verbose)),
+        'WISK_TRACKER_EVENTFILTER': '%d'%(getfiltermask(args))})
+    
     if args.trace:
         cmdenv['WISK_TRACKER_DEBUGLOG'] = WISK_DEBUGLOG
         cmdenv['WISK_TRACKER_DEBUGLOG_FD'] = '-1'
@@ -801,6 +818,7 @@ Example:
         parser.add_argument('-environ', '--environ', type=str, action='append',
                             default=['PATH', 'LOGNAME', 'LANGUAGE', 'HOME', 'USER', 'SHELL'],
                             help='Environment variables for carry forward')
+        parser.add_argument('-filter', '--filter', type=str, default=None, help='Filtered list of events to track')
 
         args = partialparse(parser)
 

@@ -144,6 +144,7 @@ enum wisk_dbglvl_e {
 #define WISK_TRACKER_PIPE "WISK_TRACKER_PIPE"
 #define WISK_TRACKER_PIPE_FD "WISK_TRACKER_PIPE_FD"
 #define WISK_TRACKER_DISABLE_DEEPBIND "WISK_TRACKER_DISABLE_DEEPBIND"
+#define WISK_TRACKER_EVENTFILTER "WISK_TRACKER_EVENTFILTER"
 
 char *wisk_env_vars[] = {
 	LD_PRELOAD,
@@ -156,7 +157,8 @@ char *wisk_env_vars[] = {
 	WISK_TRACKER_DEBUGLOG_FD,
 	WISK_TRACKER_PIPE,
 	WISK_TRACKER_PIPE_FD,
-	WISK_TRACKER_DISABLE_DEEPBIND
+	WISK_TRACKER_DISABLE_DEEPBIND,
+	WISK_TRACKER_EVENTFILTER
 };
 
 typedef struct random_uuid_ {
@@ -179,6 +181,16 @@ char *postldload[] = {
 		NULL
 };
 
+enum wisk_eventfilter_e {
+	WISK_TRACK_WRITES = 0,
+	WISK_TRACK_READS,
+	WISK_TRACK_LINKS,
+	WISK_TRACK_CHMODS,
+	WISK_TRACK_PROCESS
+};
+
+#define WISK_TRACK_EVENT(x) (fs_tracker_eventfilter & (1<<(x)))
+
 #define VNAME(x) wisk_env_vars[x]
 
 #define WISK_ENV_VARCOUNT (sizeof((wisk_env_vars))/sizeof((wisk_env_vars)[0]))
@@ -191,6 +203,7 @@ static int fs_tracker_pipe = -1;
 static int fs_tracker_debuglog = -1;
 static char fs_tracker_uuid[UUID_SIZE+1];
 static char fs_tracker_puuid[UUID_SIZE+1];
+static int fs_tracker_eventfilter=0xFFFFFFFF;
 
 /* Mutex to synchronize access to global libc.symbols */
 static pthread_mutex_t libc_symbol_binding_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -1005,7 +1018,7 @@ void wisk_report_link(const char *target, const char *linkpath)
 
     if (fs_tracker_pipe < 0)
     	return;
-	if (fs_tracker_enabled()) {
+	if (fs_tracker_enabled() && WISK_TRACK_EVENT(WISK_TRACK_LINKS)) {
         listp[0] = ifnotabsolute(tbuf, target);
         listp[1] = ifnotabsolute(lbuf, linkpath);
         wisk_report_operationlist(msgbuffer, fs_tracker_uuid, "LINKS", listp);
@@ -1022,7 +1035,7 @@ void wisk_report_unlink(const char *pathname)
 
     if (fs_tracker_pipe < 0)
         return;
-    if (fs_tracker_enabled()) {
+    if (fs_tracker_enabled() && WISK_TRACK_EVENT(WISK_TRACK_LINKS)) {
         wisk_report_operation(msgbuffer, fs_tracker_uuid, "UNLINK", ifnotabsolute(buf, pathname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "UNLINK %s", pathname);
@@ -1037,7 +1050,7 @@ void wisk_report_chmod(const char *pathname)
 
     if (fs_tracker_pipe < 0)
         return;
-    if (fs_tracker_enabled()) {
+    if (fs_tracker_enabled() && WISK_TRACK_EVENT(WISK_TRACK_CHMODS)) {
         wisk_report_operation(msgbuffer, fs_tracker_uuid, "CHMOD", ifnotabsolute(buf, pathname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "CHMOD %s", pathname);
@@ -1052,7 +1065,7 @@ void wisk_report_write(const char *fname)
 
     if (fs_tracker_pipe < 0)
     	return;
-	if (fs_tracker_enabled()) {
+	if (fs_tracker_enabled() && WISK_TRACK_EVENT(WISK_TRACK_WRITES)) {
         wisk_report_operation(msgbuffer, fs_tracker_uuid, "WRITES", ifnotabsolute(buf, fname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "WRITES %s", fname);
@@ -1067,7 +1080,7 @@ void wisk_report_read(const char *fname)
 
     if (fs_tracker_pipe < 0)
     	return;
-	if (fs_tracker_enabled()) {
+	if (fs_tracker_enabled() && WISK_TRACK_EVENT(WISK_TRACK_READS)) {
         wisk_report_operation(msgbuffer, fs_tracker_uuid, "READS", ifnotabsolute(buf, fname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "READS %s", fname);
@@ -1080,7 +1093,7 @@ void wisk_report_unknown(const char *fname, const char *mode)
     char buf[PATH_MAX];
     int msglen;
 
-	if (fs_tracker_enabled() && (fs_tracker_pipe >=0)) {
+	if (fs_tracker_enabled() && (fs_tracker_pipe >=0) && WISK_TRACK_EVENT(WISK_TRACK_READS)) {
         wisk_report_operation(msgbuffer, fs_tracker_uuid, "READS-UNKNOWN", (char*)fname, -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "READS %s", fname);
@@ -1098,6 +1111,8 @@ static void  wisk_report_command()
     char envstr[BUFFER_SIZE];
 
     if (fs_tracker_pipe < 0)
+    	return;
+    if (!WISK_TRACK_EVENT(WISK_TRACK_PROCESS))
     	return;
     i = readlink("/proc/self/exe", curprog, sizeof(curprog)-1);
     if (i == PATH_MAX) {
@@ -1130,6 +1145,8 @@ static void  wisk_report_commandcomplete()
     char msgbuffer[BUFFER_SIZE];
 
     if (fs_tracker_pipe < 0)
+    	return;
+    if (!WISK_TRACK_EVENT(WISK_TRACK_PROCESS))
     	return;
     for(count=0; saved_argv[count]; count++); 
     char *listp[count+4];
@@ -1529,6 +1546,11 @@ static void fs_tracker_init_pipe(char *fs_tracker_pipe_path)
 	}
 	if (fs_tracker_pipe == -1) {
 		WISK_LOG(WISK_LOG_ERROR, "File System Tracker Pipe %s cannot be opened for write\n", fs_tracker_pipe_path);
+	}
+	d = getenv(WISK_TRACKER_EVENTFILTER);
+	if (d != NULL) {
+		fs_tracker_eventfilter = atoi(d);
+		WISK_LOG(WISK_LOG_TRACE, "File System Tracker Event Filter: %s, 0x%X\n", d, fs_tracker_eventfilter);
 	}
 	for(i=0; i< WISK_ENV_VARCOUNT; i++)
 		wisk_env_update(wisk_env_vars[i], NULL, &wisk_env_count, false);
