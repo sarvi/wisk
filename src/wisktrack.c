@@ -324,7 +324,9 @@ typedef int (*__libc_link)(const char *oldpath, const char *newpath);
 typedef int (*__libc_linkat)(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
 typedef int (*__libc_unlink)(const char *pathname);
 typedef int (*__libc_unlinkat)(int dirfd, const char *pathname, int flags);
-
+typedef int (*__libc_chmod)(__const char *__file, __mode_t __mode);
+typedef int (*__libc_fchmod)(int __fd, __mode_t __mode);
+typedef int (*__libc_fchmodat)(int __fd, __const char *__file, __mode_t __mode, int flags);
 
 #define WISK_SYMBOL_ENTRY(i) \
 	union { \
@@ -360,6 +362,9 @@ struct wisk_libc_symbols {
  	WISK_SYMBOL_ENTRY(linkat);
 	WISK_SYMBOL_ENTRY(unlink);
 	WISK_SYMBOL_ENTRY(unlinkat);
+	WISK_SYMBOL_ENTRY(chmod);
+	WISK_SYMBOL_ENTRY(fchmod);
+	WISK_SYMBOL_ENTRY(fchmodat);
 };
 
 struct wisk {
@@ -806,6 +811,31 @@ static int libc_unlinkat(int dirfd, const char *pathname, int flags)
 }
 
 
+static int libc_chmod(__const char *__file, __mode_t __mode)
+{
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_chmod(%s, %d)", pathname, mode) ;
+	wisk_bind_symbol_libc(chmod);
+
+	return wisk.libc.symbols._libc_chmod.f(__file, __mode);
+}
+
+static int libc_fchmod(int __fd, __mode_t __mode)
+{
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_fchmod(%d, %d)", fd, mode) ;
+	wisk_bind_symbol_libc(fchmod);
+
+	return wisk.libc.symbols._libc_fchmod.f(__fd, __mode);
+}
+
+static int libc_fchmodat(int __fd, __const char *__file, __mode_t __mode, int flags)
+{
+//	WISK_LOG(WISK_LOG_TRACE, "static libc_fchmodat(%d, %s, %d)", dirfd, pathname, mode) ;
+	wisk_bind_symbol_libc(fchmodat);
+
+	return wisk.libc.symbols._libc_fchmodat.f(__fd, __file, __mode, flags);
+}
+
+
 /* DO NOT call this function during library initialization! */
 static void wisk_bind_symbol_all(void)
 {
@@ -837,6 +867,9 @@ static void wisk_bind_symbol_all(void)
  	wisk_bind_symbol_libc(linkat);
 	wisk_bind_symbol_libc(unlink);
 	wisk_bind_symbol_libc(unlinkat);
+	wisk_bind_symbol_libc(chmod);
+	wisk_bind_symbol_libc(fchmod);
+	wisk_bind_symbol_libc(fchmodat);
 }
 
 /*********************************************************
@@ -993,6 +1026,21 @@ void wisk_report_unlink(const char *pathname)
         wisk_report_operation(msgbuffer, fs_tracker_uuid, "UNLINK", ifnotabsolute(buf, pathname), -1, NULL, NULL);
     } else {
         WISK_LOG(WISK_LOG_TRACE, "UNLINK %s", pathname);
+    }
+}
+
+void wisk_report_chmod(const char *pathname)
+{
+    char msgbuffer[BUFFER_SIZE];
+    char buf[PATH_MAX], lbuf[PATH_MAX];
+    int msglen;
+
+    if (fs_tracker_pipe < 0)
+        return;
+    if (fs_tracker_enabled()) {
+        wisk_report_operation(msgbuffer, fs_tracker_uuid, "CHMOD", ifnotabsolute(buf, pathname), -1, NULL, NULL);
+    } else {
+        WISK_LOG(WISK_LOG_TRACE, "CHMOD %s", pathname);
     }
 }
 
@@ -2114,6 +2162,70 @@ int unlinkat(int dirfd, const char *pathname, int flags)
 }
 #endif
 
+#ifdef INTERCEPT_CHMOD
+static int wisk_chmod(__const char *__file, __mode_t __mode)
+{
+	if (fs_tracker_enabled()) {
+		wisk_report_chmod(__file);
+	    return libc_chmod(__file, __mode);
+    } else
+	    return libc_chmod(__file, __mode);
+}
+
+int chmod(__const char *__file, __mode_t __mode)
+{
+    WISK_LOG(WISK_LOG_TRACE, "chmod(%s, %d)", __file, __mode);
+	return wisk_chmod(__file, __mode);
+}
+#endif
+
+#ifdef INTERCEPT_FCHMOD
+static int wisk_fchmod(int __fd, __mode_t __mode)
+{
+	int i;
+	char fdstr[PATH_MAX];
+	char fdpath[PATH_MAX];
+
+	if (fs_tracker_enabled()) {
+		sprintf(fdstr, "/proc/self/fd/%d", __fd);
+		i = readlink(fdstr, fdpath, sizeof(fdpath)-1);
+		if (i == PATH_MAX) {
+			fdpath[PATH_MAX-1] = '\0';
+	    } else if (i == -1) {
+	        WISK_LOG(WISK_LOG_ERROR, "Falling back to ArgV, %d: %s", errno, strerror(errno));
+            strncpy(fdpath, "FAILED_FILE_PATH", PATH_MAX);
+	    } else {
+            fdpath[i] = '\0';
+	    }
+		wisk_report_chmod(fdpath);
+	    return libc_fchmod(__fd, __mode);
+    } else
+	    return libc_fchmod(__fd, __mode);
+}
+
+int fchmod(int __fd, __mode_t __mode)
+{
+    WISK_LOG(WISK_LOG_TRACE, "fchmod(%d, %d)", __fd, __mode);
+	return wisk_fchmod(__fd, __mode);
+}
+#endif
+
+#ifdef INTERCEPT_FCHMODAT
+static int wisk_fchmodat(int __fd, __const char *__file, __mode_t __mode, int flags)
+{
+	if (fs_tracker_enabled()) {
+		wisk_report_chmod(__file);
+	    return libc_fchmodat(__fd, __file, __mode, flags);
+    } else
+	    return libc_fchmodat(__fd, __file, __mode, flags);
+}
+
+int fchmodat(int __fd, __const char *__file, __mode_t __mode, int flags)
+{
+    WISK_LOG(WISK_LOG_TRACE, "fchmodat(%d, %s, %d)", __fd, __file, __mode, flags);
+	return wisk_fchmodat(__fd, __file, __mode, flags);
+}
+#endif
 
 
 /****************************
